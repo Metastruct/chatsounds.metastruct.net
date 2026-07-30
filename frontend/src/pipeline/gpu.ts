@@ -11,16 +11,15 @@
  */
 
 export type GpuStatus =
-  /** WebGPU is available and an adapter was granted. */
-  | {
-      available: true
-      /**
-       * Whether the adapter supports `shader-f16`. Half-precision weights are
-       * the fast path for the Whisper encoder, and an adapter without the
-       * feature fails to load them rather than emulating.
-       */
-      f16: boolean
-    }
+  /**
+   * WebGPU is available and an adapter was granted.
+   *
+   * Deliberately carries no `shader-f16` flag. It used to, to pick half
+   * precision weights for the Whisper encoder, and that produced confidently
+   * wrong transcripts; see `dtypesFor`. Probing a capability we have decided not
+   * to use would only invite someone to use it again.
+   */
+  | { available: true }
   /**
    * `navigator.gpu` is missing entirely. WebGPU is `[SecureContext]`-gated, so
    * on a plain-HTTP origin that is not localhost the browser hides it no matter
@@ -84,7 +83,7 @@ async function probe(): Promise<GpuStatus> {
   try {
     const adapter = await gpu.requestAdapter()
     if (!adapter) return { available: false, reason: 'no-adapter' }
-    return { available: true, f16: adapter.features.has('shader-f16') }
+    return { available: true }
   } catch {
     return { available: false, reason: 'no-adapter' }
   }

@@ -17,7 +17,7 @@ import {
 } from '@huggingface/transformers'
 import { WORK_SAMPLE_RATE } from './decode'
 import type { Precision } from './attempts'
-import { type Backend, type BackendChoice, gpuStatus, resolveBackend } from './gpu'
+import { type Backend, type BackendChoice, resolveBackend } from './gpu'
 import { configureOrt } from './ort'
 import type { Word } from './segmenter'
 
@@ -144,19 +144,23 @@ const cache = new Map<string, Promise<AutomaticSpeechRecognitionPipeline>>()
  * differently: the decoder is the bulk of the weights and survives 4-bit well,
  * while the encoder is what the word timings come out of and is left heavier.
  *
- * Half precision is a GPU-only option, and only on an adapter that advertises
- * `shader-f16` -- without the feature the weights are rejected rather than
- * widened, which is why the flag is read off the adapter rather than assumed.
+ * **The encoder is never half precision.** It used to be, on any adapter
+ * advertising `shader-f16`, and on that path Whisper did not merely lose
+ * accuracy: it transcribed the wrong words entirely and fell into loops, "and
+ * and and and" for seven seconds, while the same recording on the processor came
+ * out clean. The encoder is what turns audio into the representation the decoder
+ * reads, so once it degrades the decoder has nothing to hold on to. Half the
+ * download is not worth a transcript that is confidently wrong.
  *
  * `full` exists because onnxruntime's WASM backend rejects some q8 decoder
  * graphs outright -- "Missing required scale ... MatMulNBits" -- and which builds
  * are affected varies. It is not tried in the same worker as a failed `fast`
  * attempt, though; see `Precision` at the call site in the worker.
  */
-function dtypesFor(backend: Backend, f16: boolean, precision: Precision) {
+function dtypesFor(backend: Backend, precision: Precision) {
   if (precision === 'full') return { encoder_model: 'fp32', decoder_model_merged: 'fp32' } as const
   return backend === 'webgpu'
-    ? ({ encoder_model: f16 ? 'fp16' : 'fp32', decoder_model_merged: 'q4' } as const)
+    ? ({ encoder_model: 'fp32', decoder_model_merged: 'q4' } as const)
     : ({ encoder_model: 'q8', decoder_model_merged: 'q4' } as const)
 }
 
@@ -169,7 +173,6 @@ async function getPipeline(
   // Which wasm binary onnxruntime loads depends on the answer, so this has to
   // be settled before the first session is created.
   await configureOrt(backend)
-  const gpu = await gpuStatus()
   const key = `${modelId}:${backend}:${precision}`
 
   const existing = cache.get(key)
@@ -177,7 +180,7 @@ async function getPipeline(
 
   const attempt = pipeline('automatic-speech-recognition', modelId, {
     device: backend,
-    dtype: { ...dtypesFor(backend, gpu.available && gpu.f16, precision) },
+    dtype: { ...dtypesFor(backend, precision) },
     progress_callback: trackDownload(onProgress),
   }) as Promise<AutomaticSpeechRecognitionPipeline>
 
