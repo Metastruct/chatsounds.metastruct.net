@@ -32,7 +32,10 @@ export function Navbar({ tab, onTab }: Props) {
       <div className="container is-wide">
         <div className="navbar-brand">
           <a href="https://metastruct.net" title="Meta Construct" rel="noreferrer">
-            <img src="/logo.svg" className="logo navbar-item" alt="Meta Construct" />
+            {/* Not a navbar-item: that class carries padding meant for text
+                links, which pushed the logo away from the edge and made the bar
+                taller than the logo needs. */}
+            <img src="/logo.svg" className="logo" alt="Meta Construct" />
           </a>
           <button
             type="button"

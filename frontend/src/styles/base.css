@@ -178,8 +178,9 @@ hr {
 
 /* --- navbar -------------------------------------------------------------- */
 
-/* metastruct.net's navbar. Their height comes from the 52px logo sitting inside
-   a navbar-item's padding, not from min-height, so the bar ends up ~66px. */
+/* metastruct.net's navbar, at the logo's own height. Theirs pads the logo like a
+   text link, which makes the bar ~68px and insets the mark from the edge; here
+   the logo sets the height and the items centre against it. */
 .navbar {
   background: var(--chrome);
   min-height: 3.25rem;
@@ -201,8 +202,11 @@ hr {
   flex: none;
 }
 .navbar-brand img.logo {
-  height: 52px;
+  height: 44px;
   display: block;
+  /* Sits against the container's own padding, with a little air before the
+     first tab and none of a link's inset. */
+  margin-right: 0.75rem;
 }
 .navbar-menu {
   display: flex;
