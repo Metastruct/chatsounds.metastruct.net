@@ -157,6 +157,8 @@ function PrView({ token, myLogin }: { token: string; myLogin: string }) {
   const detail = review.detail
   const [denyAllOpen, setDenyAllOpen] = useState(false)
   const [denyAllComment, setDenyAllComment] = useState('')
+  const [closeOpen, setCloseOpen] = useState(false)
+  const [closeReason, setCloseReason] = useState('')
 
   if (!detail) return null
 
@@ -242,7 +244,7 @@ function PrView({ token, myLogin }: { token: string; myLogin: string }) {
           <button
             type="button"
             className="button is-danger"
-            disabled={review.busy}
+            disabled={review.busy || review.merged || review.closed}
             onClick={() => setDenyAllOpen((value) => !value)}
           >
             Deny all
@@ -250,7 +252,7 @@ function PrView({ token, myLogin }: { token: string; myLogin: string }) {
           <button
             type="button"
             className="button"
-            disabled={review.busy}
+            disabled={review.busy || review.merged || review.closed}
             onClick={() => void review.approveAll(token, myLogin)}
           >
             Approve all
@@ -258,7 +260,9 @@ function PrView({ token, myLogin }: { token: string; myLogin: string }) {
           <button
             type="button"
             className="button is-primary"
-            disabled={review.busy || review.merged || detail.mergeable === false}
+            disabled={
+              review.busy || review.merged || review.closed || detail.mergeable === false
+            }
             title={
               detail.mergeable === false
                 ? 'GitHub says this cannot be merged as it stands'
@@ -268,7 +272,64 @@ function PrView({ token, myLogin }: { token: string; myLogin: string }) {
           >
             {review.merged ? 'Merged' : 'Merge'}
           </button>
+
+          <span className="spacer" />
+
+          {/* Set apart from the rest: this one ends the request rather than
+              ruling on it, and it asks before it does. */}
+          <button
+            type="button"
+            className="button is-danger"
+            disabled={review.busy || review.merged || review.closed}
+            onClick={() => setCloseOpen((value) => !value)}
+          >
+            {review.closed ? 'Closed' : 'Close'}
+          </button>
         </div>
+
+        {closeOpen && !review.merged && !review.closed && (
+          <div className="close-box">
+            <p>
+              Close #{detail.number} without merging? {detail.author} can reopen it
+              on GitHub.
+            </p>
+            <div className="row is-tight">
+              <input
+                className="input is-small"
+                placeholder="Why? (goes to the author, optional)"
+                value={closeReason}
+                autoFocus
+                onChange={(event) => setCloseReason(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    void review.turnAway(token, closeReason)
+                    setCloseOpen(false)
+                  }
+                  if (event.key === 'Escape') setCloseOpen(false)
+                }}
+              />
+              <button
+                type="button"
+                className="button is-small is-danger"
+                disabled={review.busy}
+                onClick={() => {
+                  void review.turnAway(token, closeReason)
+                  setCloseOpen(false)
+                }}
+              >
+                Close it
+              </button>
+              <button
+                type="button"
+                className="button is-small"
+                disabled={review.busy}
+                onClick={() => setCloseOpen(false)}
+              >
+                Keep it open
+              </button>
+            </div>
+          </div>
+        )}
 
         {denyAllOpen && !review.merged && (
           <div className="deny-box">
@@ -301,6 +362,9 @@ function PrView({ token, myLogin }: { token: string; myLogin: string }) {
         )}
 
         {review.merged && <p className="pr-done">Merged. The sounds are in.</p>}
+        {review.closed && !review.merged && (
+          <p className="muted">Closed without merging. It can be reopened on GitHub.</p>
+        )}
         {review.error && <p className="warning-line">{review.error}</p>}
       </div>
     </div>

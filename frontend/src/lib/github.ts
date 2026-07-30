@@ -411,6 +411,8 @@ export interface PrDetail {
   mergeable: boolean | null
   mergeableState: string
   merged: boolean
+  /** `open` or `closed`, so one closed elsewhere does not look actionable. */
+  state: string
 }
 
 export async function getPrDetail(token: string, number: number): Promise<PrDetail> {
@@ -422,6 +424,7 @@ export async function getPrDetail(token: string, number: number): Promise<PrDeta
     mergeable: boolean | null
     mergeable_state: string
     merged: boolean
+    state: string
   }>(token, 'GET', `/repos/${UPSTREAM.owner}/${UPSTREAM.repo}/pulls/${number}`)
   return {
     number: data.number,
@@ -434,6 +437,7 @@ export async function getPrDetail(token: string, number: number): Promise<PrDeta
     mergeable: data.mergeable,
     mergeableState: data.mergeable_state,
     merged: data.merged,
+    state: data.state,
   }
 }
 
@@ -652,6 +656,20 @@ export async function postFileComment(
 export async function postPrComment(token: string, number: number, body: string): Promise<void> {
   await api(token, 'POST', `/repos/${UPSTREAM.owner}/${UPSTREAM.repo}/issues/${number}/comments`, {
     body,
+  })
+}
+
+/**
+ * Turn a pull request away without merging it.
+ *
+ * Separate from a denial: a denial asks for changes and leaves the request
+ * open, this ends it. The author can still reopen on GitHub, which is why this
+ * is not treated as destruction, but it is the one action here that stops
+ * someone else's work, so the interface asks first.
+ */
+export async function closePr(token: string, number: number): Promise<void> {
+  await api(token, 'PATCH', `/repos/${UPSTREAM.owner}/${UPSTREAM.repo}/pulls/${number}`, {
+    state: 'closed',
   })
 }
 

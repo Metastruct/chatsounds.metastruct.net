@@ -328,6 +328,21 @@
   flex-wrap: wrap;
 }
 
+/* Bordered in the danger colour, because it is the one control here that ends
+   someone else's work rather than commenting on it. */
+.close-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  max-width: 34rem;
+}
+.close-box .input {
+  max-width: 20rem;
+}
+
 .pr-messages {
   display: flex;
   flex-direction: column;

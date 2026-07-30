@@ -22,6 +22,7 @@ import {
   type ReviewEntry,
   REALM_ROOT,
   canPush,
+  closePr,
   fetchBlobBytes,
   fileRefFromComment,
   getPrDetail,
@@ -84,6 +85,7 @@ interface ReviewState {
   loading: string | null
   busy: boolean
   merged: boolean
+  closed: boolean
   error: string | null
 
   checkAccess: (token: string) => Promise<void>
@@ -94,6 +96,8 @@ interface ReviewState {
   denyAll: (token: string, comment: string, myLogin: string) => Promise<void>
   approveAll: (token: string, myLogin: string) => Promise<void>
   merge: (token: string) => Promise<void>
+  /** Turn the request away without merging. `reason` may be empty. */
+  turnAway: (token: string, reason: string) => Promise<void>
 }
 
 /** Something said about the pull request as a whole, rather than about a file. */
@@ -183,6 +187,7 @@ export const useReview = create<ReviewState>((set, get) => ({
   loading: null,
   busy: false,
   merged: false,
+  closed: false,
   error: null,
 
   async checkAccess(token) {
@@ -247,6 +252,7 @@ export const useReview = create<ReviewState>((set, get) => ({
       comments: [],
       messages: [],
       merged: false,
+      closed: false,
       error: null,
       loading: 'reading the pull request',
     })
@@ -280,7 +286,16 @@ export const useReview = create<ReviewState>((set, get) => ({
 
       // Attribution needs the sounds, so the comments come after them rather
       // than alongside.
-      set({ detail, sounds, others, reviews, merged: detail.merged })
+      set({
+        detail,
+        sounds,
+        others,
+        reviews,
+        merged: detail.merged,
+        // It may already have been closed somewhere else, in which case none of
+        // the buttons below should look available.
+        closed: detail.state === 'closed' && !detail.merged,
+      })
       void readEverythingSaid(token, number, sounds, reviews).then((said) => {
         set((state) => (state.detail?.number === number ? said : {}))
       })
@@ -399,6 +414,27 @@ export const useReview = create<ReviewState>((set, get) => ({
         reviews: withMyVerdict(state.reviews, myLogin, 'APPROVED'),
       }))
       void refresh(token, detail.number, set, get().sounds)
+    } catch (error) {
+      set({ busy: false, error: error instanceof Error ? error.message : String(error) })
+    }
+  },
+
+  async turnAway(token, reason) {
+    const { detail } = get()
+    if (!detail) return
+    set({ busy: true, error: null })
+    try {
+      // The reason goes up first: closing without one leaves the author with a
+      // shut door and no explanation, and once it is closed the comment reads
+      // as an afterthought.
+      if (reason.trim()) await postPrComment(token, detail.number, reason.trim())
+      await closePr(token, detail.number)
+      set((state) => ({
+        busy: false,
+        closed: true,
+        // Gone from the list as well; it is no longer waiting on anyone.
+        prs: state.prs?.filter((pr) => pr.number !== detail.number) ?? null,
+      }))
     } catch (error) {
       set({ busy: false, error: error instanceof Error ? error.message : String(error) })
     }
