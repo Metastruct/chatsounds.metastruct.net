@@ -5,6 +5,7 @@ import {
   type GpuStatus,
   browserFamily,
   gpuStatus,
+  platformFamily,
 } from '../../pipeline/gpu'
 import { ACCEPTED_EXTENSIONS, describeUnsupported } from '../../pipeline/decode'
 import { DEFAULTS, useJob } from '../../store/useJob'
@@ -235,6 +236,7 @@ function GpuNotice({ reason }: { reason: 'insecure-origin' | 'unsupported' | 'no
   }
 
   const family = browserFamily()
+  const platform = platformFamily()
 
   if (family === 'firefox') {
     return (
@@ -248,16 +250,29 @@ function GpuNotice({ reason }: { reason: 'insecure-origin' | 'unsupported' | 'no
         </p>
         <p style={{ marginTop: '0.5rem' }}>
           {reason === 'unsupported' ? (
+            platform === 'windows' ? (
+              <>
+                Firefox has it on by default on Windows, so this is unusual. Check{' '}
+                <code>dom.webgpu.enabled</code> in <code>about:config</code>, and
+                whether the graphics driver is current.
+              </>
+            ) : (
+              <>
+                Firefox has it on by default on Windows only. Here, open{' '}
+                <code>about:config</code>, set <code>dom.webgpu.enabled</code> to{' '}
+                <code>true</code>, and restart Firefox.
+              </>
+            )
+          ) : platform === 'linux' ? (
             <>
-              Firefox has it on by default on Windows only. On Linux and macOS, open{' '}
-              <code>about:config</code>, set <code>dom.webgpu.enabled</code> to{' '}
-              <code>true</code>, and restart Firefox.
+              Usually a graphics driver Firefox does not trust rather than the card
+              itself. It wants a working Vulkan driver, so check that{' '}
+              <code>vulkaninfo</code> runs before changing anything in the browser.
             </>
           ) : (
             <>
               Usually a graphics driver Firefox does not trust rather than the card
-              itself. On Linux it wants a working Vulkan driver, so check that{' '}
-              <code>vulkaninfo</code> runs before changing anything in the browser.
+              itself, and a virtual machine rarely has one it will take.
             </>
           )}
         </p>
@@ -280,11 +295,27 @@ function GpuNotice({ reason }: { reason: 'insecure-origin' | 'unsupported' | 'no
           </strong>
         </p>
         <p style={{ marginTop: '0.5rem' }}>
-          On <strong>Linux</strong> this is usually not the card. Turn on both{' '}
-          <code>chrome://flags/#enable-unsafe-webgpu</code> and{' '}
-          <code>chrome://flags/#enable-vulkan</code>, then restart the browser.{' '}
+          {platform === 'linux' ? (
+            <>
+              On Linux this is usually not the card. Turn on both{' '}
+              <code>chrome://flags/#enable-unsafe-webgpu</code> and{' '}
+              <code>chrome://flags/#enable-vulkan</code>, then restart the browser.
+              Brave also blocks it under Shields.
+            </>
+          ) : platform === 'windows' ? (
+            <>
+              Windows normally has it on, so the card or its driver is the usual
+              suspect, and a virtual machine rarely has one that qualifies. Updating
+              the graphics driver is the first thing to try.
+            </>
+          ) : (
+            <>
+              The card or its driver is the usual suspect, and a virtual machine
+              rarely has one that qualifies.
+            </>
+          )}{' '}
           <code>chrome://gpu</code> gives the real reason under WebGPU, which is worth
-          reading first. Brave also blocks it under Shields.
+          reading first.
         </p>
         {slow}
       </>

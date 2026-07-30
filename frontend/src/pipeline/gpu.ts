@@ -50,6 +50,24 @@ export function browserFamily(): BrowserFamily {
   return 'other'
 }
 
+export type PlatformFamily = 'windows' | 'macos' | 'linux' | 'other'
+
+/**
+ * Which desktop this is, for the same reason as `browserFamily`: the way to turn
+ * WebGPU on, and the usual reason it is off, both differ per platform. Telling a
+ * Windows user to enable a Linux Vulkan flag is worse than saying nothing.
+ */
+export function platformFamily(): PlatformFamily {
+  const nav = globalThis.navigator as Navigator & { userAgentData?: { platform?: string } }
+  // userAgentData is the honest source where it exists; the agent string is the
+  // fallback, and is all Firefox and Safari offer.
+  const hint = nav?.userAgentData?.platform ?? nav?.userAgent ?? ''
+  if (/Windows/i.test(hint)) return 'windows'
+  if (/macOS|Mac OS X|Macintosh/i.test(hint)) return 'macos'
+  if (/Linux|X11|CrOS/i.test(hint)) return 'linux'
+  return 'other'
+}
+
 interface Gpu {
   requestAdapter(): Promise<{ features: { has(feature: string): boolean } } | null>
 }
