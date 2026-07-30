@@ -1,0 +1,67 @@
+# Rendered at container start by 20-make-cert.sh when BEHIND_PROXY=true, which
+# substitutes __GITHUB_CLIENT_ID__.
+#
+# This is the shape for running behind a reverse proxy (Traefik on the
+# metastruct box): the proxy terminates TLS with a real certificate, so this
+# server speaks plain HTTP on 8080 and never redirects. The COOP/COEP headers
+# stay, because they are what grant SharedArrayBuffer and they belong to the
+# response, not to the transport.
+
+server {
+    listen 8080;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    add_header Cross-Origin-Opener-Policy same-origin always;
+    add_header Cross-Origin-Embedder-Policy require-corp always;
+    add_header Cross-Origin-Resource-Policy same-origin always;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json application/wasm image/svg+xml;
+    gzip_min_length 1024;
+
+    # --- GitHub sign-in ----------------------------------------------------
+    # Same forwarders as the standalone config: github.com's OAuth endpoints
+    # send no CORS headers, so the two device-flow calls go through this origin.
+    # No secret, no state.
+    location = /github/app.json {
+        default_type application/json;
+        return 200 '{"clientId":"__GITHUB_CLIENT_ID__"}';
+    }
+    resolver 127.0.0.11 ipv6=off valid=60s;
+    location = /github/device/code {
+        set $github "https://github.com";
+        proxy_pass $github/login/device/code;
+        proxy_ssl_server_name on;
+        proxy_set_header Host github.com;
+        proxy_set_header Accept application/json;
+    }
+    location = /github/oauth/token {
+        set $github "https://github.com";
+        proxy_pass $github/login/oauth/access_token;
+        proxy_ssl_server_name on;
+        proxy_set_header Host github.com;
+        proxy_set_header Accept application/json;
+    }
+
+    # Hashed build assets, the font, and the VAD model never change in place.
+    location ~* ^/(assets|fonts|models)/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        add_header Cross-Origin-Opener-Policy same-origin always;
+        add_header Cross-Origin-Embedder-Policy require-corp always;
+        add_header Cross-Origin-Resource-Policy same-origin always;
+    }
+
+    location = /index.html {
+        add_header Cache-Control "no-cache";
+        add_header Cross-Origin-Opener-Policy same-origin always;
+        add_header Cross-Origin-Embedder-Policy require-corp always;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

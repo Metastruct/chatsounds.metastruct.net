@@ -9,6 +9,16 @@ CERT_DIR=/etc/nginx/certs
 CERT_HOSTS="${CERT_HOSTS:-localhost,127.0.0.1,::1}"
 HTTPS_PORT="${HTTPS_PORT:-8443}"
 
+# Behind a reverse proxy (Traefik with a real certificate), this container
+# speaks plain HTTP and the self-signed machinery below is dead weight: render
+# the proxy-mode config and stop.
+if [ "${BEHIND_PROXY:-}" = "true" ]; then
+    echo "make-chatsounds: BEHIND_PROXY=true, serving plain HTTP on 8080"
+    sed -e "s|__GITHUB_CLIENT_ID__|${GITHUB_CLIENT_ID:-}|g" \
+        /etc/nginx/nginx-proxy.conf.template > /etc/nginx/conf.d/default.conf
+    exit 0
+fi
+
 mkdir -p "$CERT_DIR"
 
 if [ ! -f "$CERT_DIR/cert.pem" ] || [ ! -f "$CERT_DIR/key.pem" ]; then

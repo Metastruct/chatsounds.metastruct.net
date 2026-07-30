@@ -1,4 +1,4 @@
-# make-chatsounds
+# chatsounds.metastruct.net
 
 Get sounds into a chatsounds repo, entirely in the browser. Three tabs:
 

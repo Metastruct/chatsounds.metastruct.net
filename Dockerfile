@@ -16,7 +16,11 @@ FROM nginx:1.27-alpine
 RUN apk add --no-cache openssl
 
 COPY --from=build /build/dist /usr/share/nginx/html
+# Two shapes: standalone, which makes its own certificate and speaks HTTPS, and
+# BEHIND_PROXY, which speaks plain HTTP because something in front of it holds a
+# real certificate. The entrypoint picks one.
 COPY docker/nginx.conf.template /etc/nginx/nginx.conf.template
+COPY docker/nginx-proxy.conf.template /etc/nginx/nginx-proxy.conf.template
 # The base image runs everything in this directory before starting nginx.
 COPY docker/20-make-cert.sh /docker-entrypoint.d/20-make-cert.sh
 RUN chmod +x /docker-entrypoint.d/20-make-cert.sh \

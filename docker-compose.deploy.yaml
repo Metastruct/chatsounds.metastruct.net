@@ -1,0 +1,37 @@
+# Running behind a reverse proxy that already holds a certificate.
+#
+# The standalone `docker-compose.yml` next to this one is for running your own
+# copy: it publishes ports and makes its own certificate. This one publishes
+# nothing and holds no certificate, because the proxy terminates TLS and reaches
+# the container over the shared `traefik` network.
+#
+#   GITHUB_CLIENT_ID=... docker compose -f docker-compose.deploy.yaml up -d --build
+
+services:
+  web:
+    build:
+      context: .
+    image: chatsounds:latest
+    restart: unless-stopped
+    environment:
+      # Plain HTTP on 8080, no self-signed certificate, no redirect.
+      BEHIND_PROXY: "true"
+      # Public client id of the OAuth app, served to the page at
+      # /github/app.json. The device flow has no secret to keep.
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik
+      - traefik.http.routers.chatsounds.rule=Host(`chatsounds.metastruct.net`)
+      - traefik.http.routers.chatsounds.priority=11
+      - traefik.http.services.chatsounds.loadbalancer.server.port=8080
+      - traefik.http.routers.chatsounds.tls=true
+      - traefik.http.routers.chatsounds.tls.certResolver=letsencryptmeta
+      - traefik.http.routers.chatsounds.entrypoints=websecure
+      - traefik.http.routers.chatsounds.middlewares=default_ssl
+    networks:
+      - traefik
+
+networks:
+  traefik:
+    external: true
