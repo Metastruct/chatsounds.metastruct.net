@@ -48,6 +48,16 @@ interface UploadState {
   setRealm: (id: string, realm: string) => void
   addFiles: (id: string, files: FileList | File[]) => Promise<void>
   removeFile: (areaId: string, fileId: string) => void
+  /**
+   * Take clips straight from the Extract tab, already encoded and already
+   * named. Returns the area they landed in.
+   *
+   * Separate from `addFiles` because these names are finished: they came out of
+   * the trigger rules, and clips sharing a name carry the `name/01.ogg` folder
+   * that makes them variations. Folding them again would flatten exactly that
+   * distinction and quietly drop all but one.
+   */
+  addFromExtract: (realm: string, clips: { file: File; targetName: string }[]) => Promise<string>
   /** Back to one empty area, once a pull request has taken the files. */
   reset: () => void
 }
@@ -138,6 +148,43 @@ export const useUpload = create<UploadState>((set) => ({
         }
       }),
     }))
+  },
+
+  async addFromExtract(realm, clips) {
+    const files: RealmFile[] = []
+    const rejected: { name: string; reason: string }[] = []
+
+    for (const clip of clips) {
+      // Checked like anything else, even though this app encoded them: a
+      // regression in the encoder should surface here rather than in a pull
+      // request.
+      const head = new Uint8Array(await clip.file.slice(0, OGG_PROBE_BYTES).arrayBuffer())
+      const info = identifyOgg(head)
+      const reason = describeOggProblem(clip.targetName, info)
+      if (reason || info.kind !== 'vorbis') {
+        rejected.push({ name: clip.targetName, reason: reason ?? 'not a Vorbis file' })
+        continue
+      }
+      files.push({
+        id: nextId(),
+        name: clip.targetName,
+        targetName: clip.targetName,
+        file: clip.file,
+        sampleRate: info.sampleRate,
+        channels: info.channels,
+      })
+    }
+
+    const area: RealmArea = { id: nextId(), realm, files, rejected }
+    set((state) => ({
+      // An untouched first area is a placeholder, not work; replace it rather
+      // than leaving an empty one above the clips that just arrived.
+      areas: [
+        ...state.areas.filter((existing) => existing.realm || existing.files.length),
+        area,
+      ],
+    }))
+    return area.id
   },
 
   reset() {

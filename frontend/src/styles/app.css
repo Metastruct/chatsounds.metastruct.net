@@ -543,6 +543,54 @@
   background: #fff;
 }
 
+/* Sits under the toolbar rather than floating over the page: it is a step in the
+   flow, not an interruption of it. */
+.hand-off {
+  background: var(--panel);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 0.9rem 1rem;
+  margin-bottom: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: 30rem;
+}
+.hand-off .field {
+  gap: 0.25rem;
+}
+
+/* The clip's position in the whole recording, as a scrollbar. The thumb keeps a
+   minimum width so a two second clip in a ninety minute file is still grabbable
+   rather than a sliver. */
+.clip-track {
+  position: relative;
+  height: 14px;
+  margin-top: 0.5rem;
+  background: var(--panel-sunken);
+  border-radius: var(--radius-pill);
+  touch-action: none;
+}
+.clip-track-thumb {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  min-width: 14px;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+  cursor: grab;
+}
+.clip-track-thumb:hover {
+  background: var(--accent-hi);
+}
+.clip-track-thumb:active {
+  cursor: grabbing;
+}
+.clip-track-thumb:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
 .clip-editor-times {
   margin-top: 0.5rem;
   font-size: 0.85rem;

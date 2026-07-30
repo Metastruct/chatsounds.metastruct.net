@@ -5,6 +5,9 @@ import { formatDuration, formatTime } from '../../lib/format'
 import { freeSpot } from '../../lib/gaps'
 import { toBlob } from '../../lib/blob'
 import { type Segment, relativePaths, useJob } from '../../store/useJob'
+import { useTabs } from '../../store/useTabs'
+import { useUpload } from '../../store/useUpload'
+import { HandOff } from './HandOff'
 import { ClipEditor } from './ClipEditor'
 import { SegmentRow } from './SegmentRow'
 import { Waveform, type WaveRegion } from './Waveform'
@@ -29,9 +32,13 @@ export function EditorScreen() {
     retranscribe,
     setName,
     buildDownload,
+    buildFiles,
     manifest,
     reset,
   } = useJob()
+
+  const addFromExtract = useUpload((state) => state.addFromExtract)
+  const setTab = useTabs((state) => state.setTab)
 
   const listRef = useRef<HTMLDivElement | null>(null)
   const [filter, setFilter] = useState('')
@@ -39,6 +46,8 @@ export function EditorScreen() {
   const [nameDraft, setNameDraft] = useState(name)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [handingOver, setHandingOver] = useState(false)
+  const [sending, setSending] = useState(false)
 
   const player = usePlayer(master)
   const peaks = useJob((state) => state.peaks)()
@@ -166,6 +175,26 @@ export function EditorScreen() {
   // anything to write at all: a clip left out is no file.
   const files = useMemo(() => manifest().entries.length, [manifest, segments])
 
+  /**
+   * Carry the clips into the Upload tab and follow them there.
+   *
+   * They go across as encoded files rather than as a reference to this job, so
+   * editing here afterwards does not quietly change what is queued to upload.
+   */
+  const handOver = async (realm: string) => {
+    setSending(true)
+    setSaveError(null)
+    try {
+      await addFromExtract(realm, await buildFiles())
+      setHandingOver(false)
+      setTab('upload')
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSending(false)
+    }
+  }
+
   const save = async () => {
     setSaving(true)
     setSaveError(null)
@@ -259,6 +288,15 @@ export function EditorScreen() {
 
             <button
               type="button"
+              className="button is-small"
+              disabled={sending || !files}
+              onClick={() => setHandingOver(true)}
+            >
+              {sending ? 'Sending…' : 'Send to Upload'}
+            </button>
+
+            <button
+              type="button"
               className="button is-small is-primary"
               disabled={saving || !files}
               title={`${files} ${files === 1 ? 'file' : 'files'}`}
@@ -267,6 +305,15 @@ export function EditorScreen() {
               {saving ? 'Getting the clips ready…' : `Download ${name}.zip`}
             </button>
           </div>
+
+          {handingOver && (
+            <HandOff
+              files={files}
+              busy={sending}
+              onCancel={() => setHandingOver(false)}
+              onSend={(realm) => void handOver(realm)}
+            />
+          )}
 
           {saveError && <p className="warning-line">{saveError}</p>}
 

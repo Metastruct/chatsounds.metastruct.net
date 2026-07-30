@@ -18,6 +18,9 @@ const BUCKETS = 900
 const CONTEXT_RATIO = 0.6
 const MIN_CONTEXT_S = 0.4
 
+/** Dragging an edge changes the length; sliding moves the whole clip. */
+type Kind = 'edge' | 'slide'
+
 export function ClipEditor({
   segment,
   envelope,
@@ -27,19 +30,26 @@ export function ClipEditor({
   onScrub,
 }: Props) {
   const boxRef = useRef<HTMLDivElement | null>(null)
-  const [drag, setDrag] = useState<{ start: number; end: number } | null>(null)
+  const trackRef = useRef<HTMLDivElement | null>(null)
+  const [drag, setDrag] = useState<{ start: number; end: number; kind: Kind } | null>(null)
 
-  // The visible window is derived from the committed bounds, not the dragged
-  // ones -- otherwise the waveform would slide around under the handle you are
-  // holding.
+  /**
+   * The visible window follows a slide but not an edge drag.
+   *
+   * Holding an edge, the window has to stay put or the waveform slides around
+   * under the handle you are holding. Sliding the whole clip is the opposite:
+   * the point is to travel, so the view travels with it.
+   */
+  const anchorStart = drag?.kind === 'slide' ? drag.start : segment.startS
+  const anchorEnd = drag?.kind === 'slide' ? drag.end : segment.endS
   const view = useMemo(() => {
-    const length = Math.max(segment.endS - segment.startS, 0.05)
+    const length = Math.max(anchorEnd - anchorStart, 0.05)
     const context = Math.max(length * CONTEXT_RATIO, MIN_CONTEXT_S)
     return {
-      from: Math.max(0, segment.startS - context),
-      to: Math.min(duration || segment.endS + context, segment.endS + context),
+      from: Math.max(0, anchorStart - context),
+      to: Math.min(duration || anchorEnd + context, anchorEnd + context),
     }
-  }, [segment.startS, segment.endS, duration])
+  }, [anchorStart, anchorEnd, duration])
 
   // No fetch: the envelope is already in memory, so the zoomed view is derived
   // on the spot at 5 ms resolution.
@@ -68,14 +78,63 @@ export function ClipEditor({
     const target = event.currentTarget as HTMLElement
     target.setPointerCapture(event.pointerId)
 
-    let latest = { start: segment.startS, end: segment.endS }
+    let latest = { start: segment.startS, end: segment.endS, kind: 'edge' as const }
 
     const onMove = (moveEvent: PointerEvent) => {
       const seconds = timeAt(moveEvent.clientX)
       latest =
         edge === 'start'
-          ? { start: Math.min(seconds, latest.end - 0.02), end: latest.end }
-          : { start: latest.start, end: Math.max(seconds, latest.start + 0.02) }
+          ? { start: Math.min(seconds, latest.end - 0.02), end: latest.end, kind: 'edge' }
+          : { start: latest.start, end: Math.max(seconds, latest.start + 0.02), kind: 'edge' }
+      setDrag(latest)
+    }
+
+    const onUp = () => {
+      target.releasePointerCapture(event.pointerId)
+      target.removeEventListener('pointermove', onMove)
+      target.removeEventListener('pointerup', onUp)
+      setDrag(null)
+      onCommit({
+        startS: Number(latest.start.toFixed(4)),
+        endS: Number(latest.end.toFixed(4)),
+      })
+    }
+
+    target.addEventListener('pointermove', onMove)
+    target.addEventListener('pointerup', onUp)
+  }
+
+  /**
+   * Slide the whole clip along the recording, keeping its length.
+   *
+   * Moving a clip by dragging one edge and then the other is two gestures that
+   * have to agree with each other, and any slip changes the length. This is the
+   * one gesture that cannot: the length is fixed, only the position moves.
+   */
+  const beginSlide = (event: React.PointerEvent) => {
+    event.preventDefault()
+    const track = trackRef.current
+    const total = duration || segment.endS
+    if (!track || total <= 0) return
+
+    const target = event.currentTarget as HTMLElement
+    target.setPointerCapture(event.pointerId)
+
+    const rect = track.getBoundingClientRect()
+    const length = segment.endS - segment.startS
+    // Where inside the thumb it was grabbed, so it does not jump on the first
+    // pixel of movement.
+    const grabbedAt = event.clientX - (rect.left + (segment.startS / total) * rect.width)
+
+    let latest = { start: segment.startS, end: segment.endS, kind: 'slide' as const }
+
+    const onMove = (moveEvent: PointerEvent) => {
+      const x = moveEvent.clientX - grabbedAt - rect.left
+      const start = Math.min(
+        Math.max(0, (x / rect.width) * total),
+        Math.max(0, total - length),
+      )
+      latest = { start, end: start + length, kind: 'slide' }
       setDrag(latest)
     }
 
@@ -96,6 +155,12 @@ export function ClipEditor({
 
   const span = Math.max(view.to - view.from, 1e-6)
   const percent = (t: number) => `${((t - view.from) / span) * 100}%`
+
+  const total = duration || Math.max(bounds.end, 1)
+  const thumb = {
+    left: `${(bounds.start / total) * 100}%`,
+    width: `${((bounds.end - bounds.start) / total) * 100}%`,
+  }
 
   return (
     <div className="clip-editor">
@@ -135,6 +200,22 @@ export function ClipEditor({
         >
           <span />
         </div>
+      </div>
+
+      {/* The clip's place in the whole recording, and the way to move it there
+          without touching either edge. */}
+      <div className="clip-track" ref={trackRef} title="Drag to move the clip, keeping its length">
+        <div
+          className="clip-track-thumb"
+          style={thumb}
+          onPointerDown={beginSlide}
+          role="slider"
+          aria-label="clip position"
+          aria-valuemin={0}
+          aria-valuemax={Math.max(0, total - (bounds.end - bounds.start))}
+          aria-valuenow={bounds.start}
+          tabIndex={0}
+        />
       </div>
 
       <div className="row clip-editor-times">

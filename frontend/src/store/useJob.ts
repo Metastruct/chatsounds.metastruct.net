@@ -104,6 +104,12 @@ interface JobState {
   clipFor: (id: string) => Promise<Uint8Array>
   clipUrl: (id: string) => Promise<string>
   buildDownload: () => Promise<Uint8Array>
+  /**
+   * Every included clip as a finished `.ogg`, named the way it would be in the
+   * zip. For handing the whole set to the Upload tab without going through a
+   * download and a file picker.
+   */
+  buildFiles: () => Promise<{ file: File; targetName: string }[]>
   manifest: () => ReturnType<typeof buildManifest>
   peaks: () => ReturnType<typeof peaksFor> | null
 }
@@ -578,6 +584,21 @@ export const useJob = create<JobState>((set, get) => ({
     }
 
     return buildZip(toPackSegments(segments), byId)
+  },
+
+  async buildFiles() {
+    const { segments } = get()
+    const out: { file: File; targetName: string }[] = []
+    // `place` is what decides the names, so the Upload tab gets exactly what the
+    // zip would have contained, variation folders and all.
+    for (const [segment, placed] of place(toPackSegments(segments))) {
+      const bytes = await get().clipFor(segment.id)
+      out.push({
+        file: new File([toBlob(bytes, 'audio/ogg')], placed.relativePath, { type: 'audio/ogg' }),
+        targetName: placed.relativePath,
+      })
+    }
+    return out
   },
 
   manifest() {

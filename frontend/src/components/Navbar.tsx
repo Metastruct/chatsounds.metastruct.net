@@ -10,7 +10,8 @@ import { Icon } from './Icon'
  * grew tabs of its own. The logo still leads back to the mothership.
  */
 
-export type Tab = 'extract' | 'upload' | 'review'
+export type { Tab } from '../store/useTabs'
+import type { Tab } from '../store/useTabs'
 
 const TABS: { id: Tab; label: string; icon: 'scissors' | 'cloudUpload' | 'clipboardCheck' }[] = [
   { id: 'extract', label: 'Extract', icon: 'scissors' },

@@ -1,11 +1,12 @@
-import { useState } from 'react'
 import { ExtractTab } from './components/extract/ExtractTab'
-import { Navbar, type Tab } from './components/Navbar'
+import { Navbar } from './components/Navbar'
 import { ReviewTab } from './components/review/ReviewTab'
 import { UploadTab } from './components/upload/UploadTab'
+import { useTabs } from './store/useTabs'
 
 export function App() {
-  const [tab, setTab] = useState<Tab>('extract')
+  const tab = useTabs((state) => state.tab)
+  const setTab = useTabs((state) => state.setTab)
 
   // Inactive tabs are hidden, not unmounted. Extract holds a decoded recording
   // and a live AudioContext that unmounting would tear down, and losing an
