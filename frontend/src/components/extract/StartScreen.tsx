@@ -211,10 +211,13 @@ export function StartScreen() {
  */
 function GpuNotice({ reason }: { reason: 'insecure-origin' | 'unsupported' | 'no-adapter' }) {
   const slow = (
+    // Measured rather than guessed: base on four cores of a Ryzen 3700X, with no
+    // graphics card at all, ran a 58 second recording in about a minute. The
+    // earlier "several times the recording" was pessimistic enough to talk people
+    // out of a model that would have been fine.
     <p style={{ marginTop: '0.5rem' }}>
-      It will still work, on the processor, but expect it to take several times the
-      length of the recording. The smaller models (<strong>tiny.en</strong> or{' '}
-      <strong>base</strong>) are the usual answer.
+      It will still work on the processor. <strong>base</strong> takes roughly the
+      length of the recording there, and the larger models a good deal longer.
     </p>
   )
 
