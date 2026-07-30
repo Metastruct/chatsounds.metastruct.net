@@ -117,10 +117,11 @@ function SoundRow({
   const deny = useReview((state) => state.deny)
   const busy = useReview((state) => state.busy)
   const rights = useReview((state) => state.rights)
-  // What has already been said about this file, by anyone.
-  const comments = useReview((state) =>
-    state.comments.filter((entry) => entry.path === sound.path),
-  )
+  // Selected whole, then narrowed during render. Filtering inside the selector
+  // returns a new array every call, which the store reads as a change every
+  // time it is asked, and React gives up with "maximum update depth exceeded".
+  const allComments = useReview((state) => state.comments)
+  const comments = allComments.filter((entry) => entry.path === sound.path)
 
   const [denying, setDenying] = useState(false)
   const [comment, setComment] = useState('')
