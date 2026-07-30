@@ -15,6 +15,10 @@ services:
       # Used to build the http -> https redirect, so it has to match the port
       # published on the host above.
       HTTPS_PORT: ${HTTPS_PORT:-8443}
+      # The public client id of a GitHub OAuth app with the device flow turned
+      # on. Empty means the Upload tab offers no sign-in. There is no secret to
+      # configure anywhere; the device flow does not use one.
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
     volumes:
       # Keeps the certificate across restarts -- a fresh one would make every
       # browser ask for the security exception again.

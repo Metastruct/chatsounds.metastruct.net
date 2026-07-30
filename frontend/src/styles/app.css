@@ -147,6 +147,45 @@
   margin: 0;
 }
 
+.signed-in {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+.gh-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-pill);
+  display: block;
+}
+
+/* The code is the whole point of the panel; everything else is caption. */
+.device-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.device-code {
+  font-family: var(--mono);
+  font-size: 1.8rem;
+  letter-spacing: 0.15em;
+  color: var(--accent-hi);
+  user-select: all;
+}
+
+.pr-progress {
+  margin-top: 1rem;
+  max-width: 26rem;
+}
+.pr-progress .muted {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+}
+.pr-done {
+  margin-top: 1rem;
+}
+
 /* --- processing ---------------------------------------------------------- */
 
 .processing {

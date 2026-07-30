@@ -14,10 +14,19 @@
 
 import { create } from 'zustand'
 import { OGG_PROBE_BYTES, describeOggProblem, identifyOgg } from '../pipeline/ogg'
+import { sanitizeTrigger } from '../pipeline/naming'
 
 export interface RealmFile {
   id: string
+  /** The name the file arrived with. */
   name: string
+  /**
+   * The name it will have in the repo: the filename is the trigger phrase, so
+   * it goes through the same rules as every other trigger, plus `.ogg`. The
+   * legacy preprocessor rejects paths with uppercase in them outright, so this
+   * is not cosmetic.
+   */
+  targetName: string
   file: File
   sampleRate: number
   channels: number
@@ -39,6 +48,8 @@ interface UploadState {
   setRealm: (id: string, realm: string) => void
   addFiles: (id: string, files: FileList | File[]) => Promise<void>
   removeFile: (areaId: string, fileId: string) => void
+  /** Back to one empty area, once a pull request has taken the files. */
+  reset: () => void
 }
 
 let uid = 0
@@ -88,28 +99,49 @@ export const useUpload = create<UploadState>((set) => ({
         continue
       }
       if (info.kind !== 'vorbis') continue // unreachable; narrows the type
+
+      const trigger = sanitizeTrigger(file.name.replace(/\.ogg$/i, ''))
+      if (!trigger) {
+        rejected.push({
+          name: file.name,
+          reason: `${file.name} has no letters or digits to name a sound with. Rename it to what it says.`,
+        })
+        continue
+      }
       accepted.push({
         id: nextId(),
         name: file.name,
+        targetName: `${trigger}.ogg`,
         file,
         sampleRate: info.sampleRate,
         channels: info.channels,
       })
     }
 
+    // Two dropped files can fold to the same name ("Hello!.ogg", "hello.ogg");
+    // last one wins, same as the drop-over-existing rule below.
+    const byTarget = new Map(accepted.map((file) => [file.targetName, file]))
+    accepted.length = 0
+    accepted.push(...byTarget.values())
+
     set((state) => ({
       areas: state.areas.map((area) => {
         if (area.id !== id) return area
-        // Dropping a filename that is already there replaces it, the way
-        // copying into a folder would.
-        const names = new Set(accepted.map((file) => file.name))
+        // Dropping a name that is already there replaces it, the way copying
+        // into a folder would. Compared on the folded name, since that is the
+        // one that has to be unique in the repo.
+        const names = new Set(accepted.map((file) => file.targetName))
         return {
           ...area,
-          files: [...area.files.filter((file) => !names.has(file.name)), ...accepted],
+          files: [...area.files.filter((file) => !names.has(file.targetName)), ...accepted],
           rejected,
         }
       }),
     }))
+  },
+
+  reset() {
+    set({ areas: [emptyArea()] })
   },
 
   removeFile(areaId, fileId) {

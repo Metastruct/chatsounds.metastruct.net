@@ -11,6 +11,21 @@ export default defineConfig({
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'require-corp',
     },
+    // GitHub's OAuth endpoints send no CORS headers, so the sign-in calls go
+    // through the page's own origin. nginx does the same forwarding in
+    // production; see docker/nginx.conf.template.
+    proxy: {
+      '/github/device/code': {
+        target: 'https://github.com',
+        changeOrigin: true,
+        rewrite: () => '/login/device/code',
+      },
+      '/github/oauth/token': {
+        target: 'https://github.com',
+        changeOrigin: true,
+        rewrite: () => '/login/oauth/access_token',
+      },
+    },
   },
   worker: { format: 'es' },
   build: {

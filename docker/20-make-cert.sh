@@ -49,5 +49,6 @@ fi
 
 # Substituted by hand rather than with envsubst, which would also eat nginx's own
 # $host and $request_uri.
-sed "s|__HTTPS_PORT__|${HTTPS_PORT}|g" \
+sed -e "s|__HTTPS_PORT__|${HTTPS_PORT}|g" \
+    -e "s|__GITHUB_CLIENT_ID__|${GITHUB_CLIENT_ID:-}|g" \
     /etc/nginx/nginx.conf.template > /etc/nginx/conf.d/default.conf

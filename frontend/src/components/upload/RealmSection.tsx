@@ -87,6 +87,9 @@ export function RealmSection({ area, realms }: Props) {
               <span className="realm-file-name">{file.name}</span>
               <span className="muted">
                 44.1 kHz · {file.channels === 1 ? 'mono' : 'stereo'}
+                {/* The filename is the trigger phrase, so it gets the trigger
+                    rules. Only said when that changes anything. */}
+                {file.targetName !== file.name.toLowerCase() && ` · saved as ${file.targetName}`}
               </span>
               <button
                 type="button"

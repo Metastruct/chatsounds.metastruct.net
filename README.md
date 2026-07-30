@@ -11,24 +11,25 @@ Get sounds into a chatsounds repo, entirely in the browser. Three tabs:
   sound belongs to in the repo). Realm names autocomplete from the live
   Metastruct repo, new ones are allowed, each realm is a drag-and-drop area, and
   every dropped file is checked against what the game can play (Vorbis,
-  44.1 kHz, mono or stereo) by reading its header. The end of this pipeline,
-  signing in with GitHub and opening the pull request, is not built yet; the
-  form says so rather than pretending.
+  44.1 kHz, mono or stereo) by reading its header. Filenames are folded to the
+  trigger rules on the way in, since the filename *is* the trigger phrase and
+  the repo's preprocessor rejects uppercase paths outright. Sign in with GitHub
+  and the form opens the pull request itself: fork, branch, commit, PR, all from
+  the browser.
 - **Review**, a placeholder for looking over uploads before they land.
 
 Extract deliberately knows nothing about realms and Upload nothing about
-recordings: the bridge between them is a downloaded zip, until the PR flow
-exists to be the bridge.
+recordings: the bridge between them is a downloaded zip.
 
-**Nothing is uploaded** (the tab name notwithstanding, for now). Decoding, voice
-detection, transcription, Ogg Vorbis encoding and file validation all happen in
-the tab. The server is an nginx container serving static files, with no
-database, no uploads directory and no per-user state, so it costs the same to
-host for one person as for a hundred. The two third-party requests are the
-speech model from the Hugging Face CDN and one GitHub API call for the realm
-list (`sound/chatsounds/autoadd` in `Metastruct/garrysmod-chatsounds`, cached in
-localStorage for an hour because the API allows 60 unauthenticated calls per
-hour per IP).
+**The server holds nothing.** Decoding, voice detection, transcription, Ogg
+Vorbis encoding, file validation and the whole pull-request flow happen in the
+tab; sounds go from the user's disk to the user's own fork, never through this
+host. The server is an nginx container serving static files, with no database,
+no uploads directory, no per-user state and no secrets, so it costs the same to
+host for one person as for a hundred. Outbound traffic: the speech model from
+the Hugging Face CDN, the GitHub API (realm list unauthenticated and cached an
+hour, everything else with the user's own token), and two OAuth calls forwarded
+through this origin because github.com sends no CORS headers on them.
 
 Built for [neo-chatsounds](https://github.com/Earu/neo-chatsounds) and
 [garrysmod-chatsounds](https://github.com/Metastruct/garrysmod-chatsounds).
@@ -51,6 +52,38 @@ the browser afterwards.
 > pages, which requires a trustworthy origin. Over plain HTTP on a LAN address
 > everything still works, just single-threaded and several times slower.
 > `localhost` counts as trustworthy; `192.168.x.x` does not.
+
+### Turning on GitHub sign-in
+
+The Upload tab opens pull requests as the signed-in user. To enable it,
+[register a GitHub OAuth app](https://github.com/settings/applications/new)
+(any callback URL, it is never used), tick **Enable Device Flow**, and pass the
+app's client id:
+
+```bash
+GITHUB_CLIENT_ID=Ov23liAbCdEf... docker compose up -d --build
+```
+
+Left unset, the tab simply says sign-in is not available on this copy.
+
+**Why the device flow.** A static page cannot hold the client secret the normal
+OAuth redirect flow needs, and self-hosters on `localhost`, LAN addresses and
+their own domains could never share one registered callback URL. The device
+flow needs neither: the page shows a short code, the user enters it at
+`github.com/login/device`, and the page polls for its token using only the
+public client id. The one thing github.com's OAuth endpoints lack is CORS
+headers, so nginx forwards `/github/device/code` and `/github/oauth/token` to
+github.com verbatim (see `docker/nginx.conf.template`); Vite's dev server does
+the same, with `VITE_GITHUB_CLIENT_ID` in `.env.local` supplying the id. The
+forwarder holds no secret and no state. Tokens are scoped to `public_repo` and
+live in the browser's localStorage until sign-out.
+
+**How the PR is made.** Everything runs in the tab against the REST API: ensure
+a fork exists (creating one is idempotent and asynchronous, so it is polled),
+best-effort sync the fork with upstream, branch from its head, upload each
+sound as a base64 blob, build a tree and commit, then open the cross-repo pull
+request against `master`. Every step is idempotent or freshly named, so a
+failed run is safe to retry.
 
 ---
 
@@ -301,7 +334,7 @@ copies means two `env` objects: configuring one leaves the other on the CDN.
 cd frontend
 npm install
 npm run dev     # http://localhost:5173
-npm test        # 112 unit tests
+npm test        # 116 unit tests
 npm run build
 ```
 
@@ -325,11 +358,11 @@ frontend/src/
 │                 try next when the backend fails)
 ├── workers/      the VAD/ASR/encode worker -- Web Audio is main-thread only,
 │                 so decoding stays outside it and everything else moves in
-├── store/        useJob (Extract) · useUpload (Upload) · worker client
-├── lib/          realm list fetch/cache · gap finding · formatting · icons
+├── store/        useJob (Extract) · useUpload · useGithub · worker client
+├── lib/          github (device flow · fork · PR) · realm list · gaps · icons
 ├── components/
 │   ├── extract/  start · processing · editor · waveform · clip editor
-│   ├── upload/   the realm form: combobox · drop area · footer stub
+│   ├── upload/   the realm form: combobox · drop area · sign-in and PR
 │   └──           Navbar (the three tabs) · Icon · ReviewTab
 └── styles/       design tokens taken from metastruct.net
 ```

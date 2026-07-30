@@ -1,4 +1,5 @@
-# Rendered at container start by 20-make-cert.sh, which substitutes __HTTPS_PORT__.
+# Rendered at container start by 20-make-cert.sh, which substitutes __HTTPS_PORT__
+# and __GITHUB_CLIENT_ID__.
 
 # Plain HTTP exists only to send you to HTTPS. WebGPU and SharedArrayBuffer are
 # both restricted to secure contexts, so an http:// origin silently loses the GPU
@@ -37,6 +38,33 @@ server {
     gzip on;
     gzip_types text/css application/javascript application/json application/wasm image/svg+xml;
     gzip_min_length 1024;
+
+    # --- GitHub sign-in ----------------------------------------------------
+    # The device flow needs two calls to github.com, which sends no CORS
+    # headers, so the page cannot make them itself. These locations forward the
+    # calls verbatim: no secret (the device flow does not use one), no state,
+    # nothing logged. The client id is public by definition.
+    location = /github/app.json {
+        default_type application/json;
+        return 200 '{"clientId":"__GITHUB_CLIENT_ID__"}';
+    }
+    # Docker's resolver, and a variable target so nginx re-resolves github.com
+    # instead of pinning whatever IP it saw at startup.
+    resolver 127.0.0.11 ipv6=off valid=60s;
+    location = /github/device/code {
+        set $github "https://github.com";
+        proxy_pass $github/login/device/code;
+        proxy_ssl_server_name on;
+        proxy_set_header Host github.com;
+        proxy_set_header Accept application/json;
+    }
+    location = /github/oauth/token {
+        set $github "https://github.com";
+        proxy_pass $github/login/oauth/access_token;
+        proxy_ssl_server_name on;
+        proxy_set_header Host github.com;
+        proxy_set_header Accept application/json;
+    }
 
     # Hashed build assets, the font, and the VAD model never change in place.
     location ~* ^/(assets|fonts|models)/ {
