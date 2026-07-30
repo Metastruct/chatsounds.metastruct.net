@@ -1,0 +1,64 @@
+# Build the image here, so the server only ever pulls.
+#
+# Building on the box meant the deployment depended on a working checkout there,
+# and on someone remembering to rsync and rebuild. This runs on every push to
+# main and publishes to the registry; Watchtower on the server notices the new
+# digest and restarts the container by itself.
+
+name: docker
+
+on:
+  push:
+    branches: [main]
+    # Nothing in these changes the image.
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+  workflow_dispatch:
+
+concurrency:
+  # A newer push makes an in-flight build pointless.
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          # Automatic, repo-scoped, and enough to publish this repo's package.
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          # Lowercased for us: the registry rejects uppercase in a name, and
+          # this repository has some.
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=main
+            type=raw,value=latest
+            type=sha,format=long
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # The box is x86_64; arm64 would double the build for nothing.
+          platforms: linux/amd64
+          # npm ci pulls onnxruntime and friends, which is most of the build.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

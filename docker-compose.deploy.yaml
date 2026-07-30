@@ -5,13 +5,16 @@
 # nothing and holds no certificate, because the proxy terminates TLS and reaches
 # the container over the shared `traefik` network.
 #
-#   GITHUB_CLIENT_ID=... docker compose -f docker-compose.deploy.yaml up -d --build
+# The image is built by CI and pulled, never built here. Watchtower watches the
+# `main` tag and restarts the container when the digest changes, so a push to
+# main is the whole deployment.
+#
+#   GITHUB_CLIENT_ID=... docker compose -f docker-compose.deploy.yaml up -d
 
 services:
   web:
-    build:
-      context: .
-    image: chatsounds:latest
+    image: ghcr.io/earu/chatsounds.metastruct.net:main
+    pull_policy: always
     restart: unless-stopped
     environment:
       # Plain HTTP on 8080, no self-signed certificate, no redirect.
@@ -20,6 +23,8 @@ services:
       # /github/app.json. The device flow has no secret to keep.
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
     labels:
+      # Watchtower only touches containers that opt in.
+      - com.centurylinklabs.watchtower.enable=true
       - traefik.enable=true
       - traefik.docker.network=traefik
       - traefik.http.routers.chatsounds.rule=Host(`chatsounds.metastruct.net`)
