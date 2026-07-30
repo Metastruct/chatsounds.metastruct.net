@@ -405,6 +405,8 @@ export interface PrDetail {
   author: string
   headOwner: string
   headRepo: string
+  /** The commit a file comment has to be anchored to. */
+  headSha: string
   /** null while GitHub is still computing it. */
   mergeable: boolean | null
   mergeableState: string
@@ -416,7 +418,7 @@ export async function getPrDetail(token: string, number: number): Promise<PrDeta
     number: number
     title: string
     user: { login: string }
-    head: { repo: { name: string; owner: { login: string } } | null }
+    head: { sha: string; repo: { name: string; owner: { login: string } } | null }
     mergeable: boolean | null
     mergeable_state: string
     merged: boolean
@@ -428,6 +430,7 @@ export async function getPrDetail(token: string, number: number): Promise<PrDeta
     // A deleted fork leaves head.repo null; the files are then unreachable.
     headOwner: data.head.repo?.owner.login ?? '',
     headRepo: data.head.repo?.name ?? '',
+    headSha: data.head.sha,
     mergeable: data.mergeable,
     mergeableState: data.mergeable_state,
     merged: data.merged,
@@ -511,6 +514,126 @@ export async function submitReview(
     event,
     body,
   })
+}
+
+/** What the reviews so far add up to, for the list. */
+export type PrStatus = 'approved' | 'changes' | 'waiting'
+
+export function statusFrom(reviews: ReviewEntry[]): PrStatus {
+  // Only the newest verdict from each reviewer counts, the way GitHub itself
+  // reads them, and one request for changes outweighs any number of approvals.
+  const latest = new Map<string, string>()
+  for (const review of reviews) {
+    if (review.state === 'APPROVED' || review.state === 'CHANGES_REQUESTED') {
+      latest.set(review.reviewer, review.state)
+    }
+  }
+  const verdicts = [...latest.values()]
+  if (verdicts.includes('CHANGES_REQUESTED')) return 'changes'
+  if (verdicts.includes('APPROVED')) return 'approved'
+  return 'waiting'
+}
+
+export interface FileComment {
+  id: number
+  path: string
+  body: string
+  author: string
+  url: string
+  /**
+   * Where it was left. `conversation` means it could not be attached to the
+   * file, so it names the file in its first line instead.
+   */
+  origin: 'file' | 'conversation'
+}
+
+/**
+ * The `realm/name.ogg` a conversation comment is about, if it says so.
+ *
+ * Denying a sound writes the objection onto the file itself, but when that is
+ * refused it falls back to the conversation and spells the file out first. This
+ * reads that convention back, so those comments still appear under the sound
+ * they are about rather than only on GitHub.
+ *
+ * Deliberately strict: only a leading backtick-quoted path followed by a colon
+ * counts. Anything looser would start attributing ordinary discussion to files
+ * because someone happened to mention a filename.
+ */
+export function fileRefFromComment(body: string): { ref: string; text: string } | null {
+  const match = /^\s*`([^`\n]+\.ogg)`\s*:\s*([\s\S]+)$/i.exec(body)
+  if (!match) return null
+  return { ref: match[1].trim(), text: match[2].trim() }
+}
+
+export interface PrComment {
+  id: number
+  body: string
+  author: string
+  url: string
+}
+
+/** Comments on the pull request's conversation, as opposed to on its files. */
+export async function listPrComments(token: string, number: number): Promise<PrComment[]> {
+  const { data } = await api<
+    { id: number; body: string; user: { login: string }; html_url: string }[]
+  >(token, 'GET', `/repos/${UPSTREAM.owner}/${UPSTREAM.repo}/issues/${number}/comments?per_page=100`)
+  return data.map((comment) => ({
+    id: comment.id,
+    body: comment.body ?? '',
+    author: comment.user.login,
+    url: comment.html_url,
+  }))
+}
+
+/** Review comments left on files, as opposed to the conversation. */
+export async function listFileComments(token: string, number: number): Promise<FileComment[]> {
+  const { data } = await api<
+    { id: number; path: string; body: string; user: { login: string }; html_url: string }[]
+  >(token, 'GET', `/repos/${UPSTREAM.owner}/${UPSTREAM.repo}/pulls/${number}/comments?per_page=100`)
+  return data.map((comment) => ({
+    id: comment.id,
+    path: comment.path,
+    body: comment.body,
+    author: comment.user.login,
+    url: comment.html_url,
+    origin: 'file' as const,
+  }))
+}
+
+/**
+ * Comment on one file rather than on the pull request as a whole.
+ *
+ * `subject_type: 'file'` is what makes this land on the file itself instead of
+ * a line in its diff, which matters here because these are `.ogg` files: they
+ * have no diff to point at, so there is no line number to anchor to.
+ */
+export async function postFileComment(
+  token: string,
+  number: number,
+  commitSha: string,
+  path: string,
+  body: string,
+): Promise<FileComment> {
+  const { data } = await api<{
+    id: number
+    path: string
+    body: string
+    user: { login: string }
+    html_url: string
+  }>(token, 'POST', `/repos/${UPSTREAM.owner}/${UPSTREAM.repo}/pulls/${number}/comments`, {
+    body,
+    commit_id: commitSha,
+    path,
+    subject_type: 'file',
+  })
+  return {
+    id: data.id,
+    path: data.path,
+    body: data.body,
+    author: data.user.login,
+    url: data.html_url,
+    origin: 'file',
+  }
 }
 
 /** A plain comment on the PR's conversation. */

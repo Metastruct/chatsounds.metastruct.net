@@ -198,9 +198,26 @@
   gap: 6px;
   margin-top: 1rem;
 }
+.pr-group {
+  margin: 1.25rem 0 0.4rem;
+}
+
+/* One glyph, colour-coded, at the start of every row. */
+.pr-status {
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+}
+.pr-status.is-approved {
+  color: var(--accent);
+}
+.pr-status.is-changes {
+  color: var(--danger);
+}
+
 .pr-row {
   display: grid;
-  grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+  grid-template-columns: auto 3.5rem minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.75rem;
   text-align: left;
@@ -270,6 +287,21 @@
 .review-file-tags {
   display: flex;
   gap: 4px;
+}
+
+/* Under the file they are about, indented past the play button so they read as
+   belonging to it rather than as another row. */
+.file-comments {
+  grid-column: 1 / -1;
+  padding-left: 1.25rem;
+  margin: 0.15rem 0 0.35rem;
+}
+.file-comment {
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+.file-comment a {
+  font-weight: 600;
 }
 
 /* Sits under its row, full width, so the comment has room to be a sentence. */

@@ -116,6 +116,11 @@ function SoundRow({
 }) {
   const deny = useReview((state) => state.deny)
   const busy = useReview((state) => state.busy)
+  const rights = useReview((state) => state.rights)
+  // What has already been said about this file, by anyone.
+  const comments = useReview((state) =>
+    state.comments.filter((entry) => entry.path === sound.path),
+  )
 
   const [denying, setDenying] = useState(false)
   const [comment, setComment] = useState('')
@@ -170,7 +175,7 @@ function SoundRow({
         {sound.denied && <span className="tag is-danger">denied</span>}
       </span>
 
-      {!sound.denied && (
+      {!sound.denied && rights === 'reviewer' ? (
         <button
           type="button"
           className="button is-small"
@@ -179,6 +184,22 @@ function SoundRow({
         >
           deny
         </button>
+      ) : (
+        <span />
+      )}
+
+      {/* Whatever has been said about this file, under the file it is about. */}
+      {comments.length > 0 && (
+        <div className="file-comments">
+          {comments.map((entry) => (
+            <p key={entry.id} className="file-comment">
+              <a href={entry.url} target="_blank" rel="noreferrer">
+                {entry.author}
+              </a>{' '}
+              <span className="muted">{entry.body}</span>
+            </p>
+          ))}
+        </div>
       )}
 
       {denying && (

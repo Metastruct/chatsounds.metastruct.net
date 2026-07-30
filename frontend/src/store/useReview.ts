@@ -7,25 +7,33 @@
  * so playing a sound is instant; chatsounds are seconds long, so a whole PR's
  * worth of decoded audio is smaller than one Extract recording.
  *
- * Denials post to the PR immediately, as decided: the first one submits a
- * changes-requested review naming the sound, the rest go up as plain comments,
- * so the author gets one red review and a thread, not a stack of red reviews.
+ * Denials post immediately, and land on the file they are about rather than in
+ * the conversation, so the author reads each objection beside the sound that
+ * earned it. The pull request is put into changes-requested alongside the first
+ * one; a second red review on top of a red one says nothing new.
  */
 
 import { create } from 'zustand'
 import {
+  type FileComment,
   type PrDetail,
+  type PrStatus,
   type PrSummary,
   type ReviewEntry,
   REALM_ROOT,
   canPush,
   fetchBlobBytes,
+  fileRefFromComment,
   getPrDetail,
+  listFileComments,
   listOpenPrs,
+  listPrComments,
   listPrFiles,
   listReviews,
   mergePr,
+  postFileComment,
   postPrComment,
+  statusFrom,
   submitReview,
 } from '../lib/github'
 import { type Audit, auditEnvelope } from '../pipeline/audit'
@@ -53,17 +61,24 @@ export interface OtherFile {
   status: string
 }
 
-type Gate = 'unknown' | 'checking' | 'allowed' | 'restricted'
+/** Anyone signed in may look; only push access may rule on anything. */
+type Rights = 'unknown' | 'checking' | 'reviewer' | 'onlooker'
+
+export interface PrListing extends PrSummary {
+  /** Undefined until its reviews have been read. */
+  status?: PrStatus
+}
 
 interface ReviewState {
-  gate: Gate
-  /** The token the gate was answered for; a different account asks again. */
-  gateFor: string | null
-  prs: PrSummary[] | null
+  rights: Rights
+  /** The token the rights were answered for; a different account asks again. */
+  rightsFor: string | null
+  prs: PrListing[] | null
   detail: PrDetail | null
   sounds: ReviewSound[]
   others: OtherFile[]
   reviews: ReviewEntry[]
+  comments: FileComment[]
   loading: string | null
   busy: boolean
   merged: boolean
@@ -74,51 +89,122 @@ interface ReviewState {
   open: (token: string, number: number) => Promise<void>
   close: () => void
   deny: (token: string, path: string, comment: string, myLogin: string) => Promise<void>
-  denyAll: (token: string, comment: string) => Promise<void>
-  approveAll: (token: string) => Promise<void>
+  denyAll: (token: string, comment: string, myLogin: string) => Promise<void>
+  approveAll: (token: string, myLogin: string) => Promise<void>
   merge: (token: string) => Promise<void>
 }
 
+/**
+ * Every comment about a file, wherever it was left.
+ *
+ * Comments attached to files come back as they are. Conversation comments are
+ * only included when they name a file the way the deny fallback writes them,
+ * so an objection that could not be attached still shows under its sound rather
+ * than living only on GitHub.
+ */
+async function commentsForFiles(
+  token: string,
+  number: number,
+  sounds: ReviewSound[],
+): Promise<FileComment[]> {
+  const [onFiles, conversation] = await Promise.all([
+    listFileComments(token, number),
+    listPrComments(token, number).catch(() => []),
+  ])
+
+  const byRef = new Map(sounds.map((sound) => [`${sound.realm}/${sound.name}`, sound.path]))
+  const carried: FileComment[] = []
+  for (const comment of conversation) {
+    const parsed = fileRefFromComment(comment.body)
+    const path = parsed && byRef.get(parsed.ref)
+    if (!parsed || !path) continue
+    carried.push({
+      id: comment.id,
+      path,
+      body: parsed.text,
+      author: comment.author,
+      url: comment.url,
+      origin: 'conversation',
+    })
+  }
+  return [...onFiles, ...carried]
+}
+
+/**
+ * Show our own verdict at once, then let the server's answer settle in behind it.
+ *
+ * Waiting for the round trip made the buttons look stuck: GitHub takes a moment
+ * to list a review it has just accepted, and until it did, nothing on screen had
+ * changed.
+ */
+function withMyVerdict(reviews: ReviewEntry[], me: string, state: string): ReviewEntry[] {
+  return [
+    ...reviews.filter((review) => review.reviewer !== me),
+    { reviewer: me, state, body: '', submittedAt: new Date().toISOString() },
+  ]
+}
+
 export const useReview = create<ReviewState>((set, get) => ({
-  gate: 'unknown',
-  gateFor: null,
+  rights: 'unknown',
+  rightsFor: null,
   prs: null,
   detail: null,
   sounds: [],
   others: [],
   reviews: [],
+  comments: [],
   loading: null,
   busy: false,
   merged: false,
   error: null,
 
   async checkAccess(token) {
-    const { gate, gateFor } = get()
+    const { rights, rightsFor } = get()
     // Same account, settled or being settled: nothing to redo. A different
     // token means someone signed out and back in, and their rights are their
     // own, as is what the last account was looking at.
-    if (gateFor === token && gate !== 'unknown') return
+    if (rightsFor === token && rights !== 'unknown') return
     set({
-      gate: 'checking',
-      gateFor: token,
+      rights: 'checking',
+      rightsFor: token,
       prs: null,
       detail: null,
       sounds: [],
       others: [],
       reviews: [],
+      comments: [],
       error: null,
     })
     try {
-      set({ gate: (await canPush(token)) ? 'allowed' : 'restricted' })
+      set({ rights: (await canPush(token)) ? 'reviewer' : 'onlooker' })
     } catch {
       // Failing to answer is not proof of rights; the safe reading is no.
-      set({ gate: 'restricted' })
+      set({ rights: 'onlooker' })
     }
   },
 
   async loadPrs(token) {
     try {
-      set({ prs: await listOpenPrs(token), error: null })
+      const prs = await listOpenPrs(token)
+      set({ prs, error: null })
+
+      // Each status is its own request, so they are fetched after the list is
+      // already on screen and fill in as they land. A pull request with no
+      // status yet reads as waiting, which is what it is.
+      await Promise.all(
+        prs.map(async (pr) => {
+          try {
+            const status = statusFrom(await listReviews(token, pr.number))
+            set((state) => ({
+              prs: state.prs?.map((item) =>
+                item.number === pr.number ? { ...item, status } : item,
+              ) ?? null,
+            }))
+          } catch {
+            /* one missing badge is not worth failing the list over */
+          }
+        }),
+      )
     } catch (error) {
       set({ error: error instanceof Error ? error.message : String(error) })
     }
@@ -130,6 +216,7 @@ export const useReview = create<ReviewState>((set, get) => ({
       sounds: [],
       others: [],
       reviews: [],
+      comments: [],
       merged: false,
       error: null,
       loading: 'reading the pull request',
@@ -162,7 +249,12 @@ export const useReview = create<ReviewState>((set, get) => ({
         }
       }
 
+      // Attribution needs the sounds, so the comments come after them rather
+      // than alongside.
       set({ detail, sounds, others, reviews, merged: detail.merged })
+      void commentsForFiles(token, number, sounds).then((comments) => {
+        set((state) => (state.detail?.number === number ? { comments } : {}))
+      })
 
       if (!detail.headOwner) {
         set({ loading: null, error: 'The fork this came from is gone, so the sounds cannot be fetched.' })
@@ -185,37 +277,71 @@ export const useReview = create<ReviewState>((set, get) => ({
   },
 
   close() {
-    set({ detail: null, sounds: [], others: [], reviews: [], loading: null, error: null })
+    set({
+      detail: null,
+      sounds: [],
+      others: [],
+      reviews: [],
+      comments: [],
+      loading: null,
+      error: null,
+    })
   },
 
+  /**
+   * Turn down one sound, with the objection attached to that file.
+   *
+   * The comment goes on the file rather than into the conversation, so the
+   * author reads it next to the sound it is about instead of matching filenames
+   * out of a list. The pull request is separately put into changes-requested,
+   * but only if this reviewer has not already done so: a second red review on
+   * top of a red one says nothing new.
+   */
   async deny(token, path, comment, myLogin) {
     const { detail, reviews, sounds } = get()
     const sound = sounds.find((item) => item.path === path)
     if (!detail || !sound) return
     set({ busy: true, error: null })
+
     try {
-      const line = `\`${sound.realm}/${sound.name}\`: ${comment}`
-      // My newest review decides: already red, and another red review would
-      // just stack; still green or absent, and the first denial flips it.
+      let posted: FileComment | null = null
+      try {
+        posted = await postFileComment(token, detail.number, detail.headSha, path, comment)
+      } catch {
+        // A file comment is the point, but losing the objection would be worse
+        // than putting it somewhere less convenient, so it falls back to the
+        // conversation with the filename spelled out.
+        await postPrComment(token, detail.number, `\`${sound.realm}/${sound.name}\`: ${comment}`)
+      }
+
       const mine = reviews.filter((review) => review.reviewer === myLogin)
       const alreadyRed = mine[mine.length - 1]?.state === 'CHANGES_REQUESTED'
-      if (alreadyRed) await postPrComment(token, detail.number, line)
-      else await submitReview(token, detail.number, 'REQUEST_CHANGES', line)
+      if (!alreadyRed) {
+        await submitReview(
+          token,
+          detail.number,
+          'REQUEST_CHANGES',
+          'Some of these need another look; see the comments on the files.',
+        )
+      }
 
       set((state) => ({
         busy: false,
         sounds: state.sounds.map((item) =>
           item.path === path ? { ...item, denied: true } : item,
         ),
-        reviews: state.reviews,
+        comments: posted ? [...state.comments, posted] : state.comments,
+        reviews: alreadyRed
+          ? state.reviews
+          : withMyVerdict(state.reviews, myLogin, 'CHANGES_REQUESTED'),
       }))
-      set({ reviews: await listReviews(token, detail.number) })
+      void refresh(token, detail.number, set, get().sounds)
     } catch (error) {
       set({ busy: false, error: error instanceof Error ? error.message : String(error) })
     }
   },
 
-  async denyAll(token, comment) {
+  async denyAll(token, comment, myLogin) {
     const { detail } = get()
     if (!detail) return
     set({ busy: true, error: null })
@@ -224,20 +350,25 @@ export const useReview = create<ReviewState>((set, get) => ({
       set((state) => ({
         busy: false,
         sounds: state.sounds.map((item) => ({ ...item, denied: true })),
+        reviews: withMyVerdict(state.reviews, myLogin, 'CHANGES_REQUESTED'),
       }))
-      set({ reviews: await listReviews(token, detail.number) })
+      void refresh(token, detail.number, set, get().sounds)
     } catch (error) {
       set({ busy: false, error: error instanceof Error ? error.message : String(error) })
     }
   },
 
-  async approveAll(token) {
+  async approveAll(token, myLogin) {
     const { detail } = get()
     if (!detail) return
     set({ busy: true, error: null })
     try {
       await submitReview(token, detail.number, 'APPROVE', '')
-      set({ busy: false, reviews: await listReviews(token, detail.number) })
+      set((state) => ({
+        busy: false,
+        reviews: withMyVerdict(state.reviews, myLogin, 'APPROVED'),
+      }))
+      void refresh(token, detail.number, set, get().sounds)
     } catch (error) {
       set({ busy: false, error: error instanceof Error ? error.message : String(error) })
     }
@@ -255,6 +386,36 @@ export const useReview = create<ReviewState>((set, get) => ({
     }
   },
 }))
+
+/**
+ * Reconcile with the server after an optimistic update, quietly.
+ *
+ * Nothing waits on this and a failure is swallowed: the screen already shows
+ * the verdict that GitHub accepted, and an error here would only contradict a
+ * change that did land. Also refreshes the row in the list behind the view.
+ */
+async function refresh(
+  token: string,
+  number: number,
+  set: (partial: (state: ReviewState) => Partial<ReviewState>) => void,
+  sounds: ReviewSound[],
+): Promise<void> {
+  try {
+    const [reviews, comments] = await Promise.all([
+      listReviews(token, number),
+      commentsForFiles(token, number, sounds),
+    ])
+    const status = statusFrom(reviews)
+    set((state) => ({
+      // Only if this pull request is still the one open, or a fast click
+      // elsewhere would be overwritten by an answer about the previous one.
+      ...(state.detail?.number === number ? { reviews, comments } : {}),
+      prs: state.prs?.map((pr) => (pr.number === number ? { ...pr, status } : pr)) ?? null,
+    }))
+  } catch {
+    /* the optimistic state stands */
+  }
+}
 
 async function checkSound(
   token: string,
