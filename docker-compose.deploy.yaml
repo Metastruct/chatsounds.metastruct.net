@@ -13,7 +13,7 @@
 
 services:
   web:
-    image: ghcr.io/earu/chatsounds.metastruct.net:main
+    image: ghcr.io/metastruct/chatsounds.metastruct.net:main
     pull_policy: always
     restart: unless-stopped
     environment:
