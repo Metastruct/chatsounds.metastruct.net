@@ -17,7 +17,6 @@ import { type Envelope, peaksFor } from '../pipeline/envelope'
 import { fallbackTrigger, safeFileName, sanitizeTrigger } from '../pipeline/naming'
 import { snapEdge } from '../pipeline/segmenter'
 import { type PackSegment, buildManifest, buildZip, place } from '../pipeline/pack'
-import { saveJob, deleteStoredJob } from './persist'
 import { type Progress, RetryableError, pipeline } from './worker'
 import type { AnalyzeOptions } from '../workers/pipeline.worker'
 
@@ -266,11 +265,6 @@ export const useJob = create<JobState>((set, get) => ({
         progress: null,
       })
 
-      void saveJob({
-        filename: file.name,
-        durationS: decoded.durationS,
-        segmentCount: segments.length,
-      })
     } catch (error) {
       set({
         status: 'failed',
@@ -286,7 +280,6 @@ export const useJob = create<JobState>((set, get) => ({
     for (const url of urlCache.values()) URL.revokeObjectURL(url)
     urlCache.clear()
     clipCache.clear()
-    void deleteStoredJob()
     set({
       status: 'idle',
       progress: null,

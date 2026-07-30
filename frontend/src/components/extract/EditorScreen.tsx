@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useHotkeys } from '../hooks/useHotkeys'
-import { usePlayer } from '../hooks/usePlayer'
-import { formatDuration, formatTime } from '../lib/format'
-import { freeSpot } from '../lib/gaps'
-import { toBlob } from '../lib/blob'
-import { type Segment, relativePaths, useJob } from '../store/useJob'
+import { useHotkeys } from '../../hooks/useHotkeys'
+import { usePlayer } from '../../hooks/usePlayer'
+import { formatDuration, formatTime } from '../../lib/format'
+import { freeSpot } from '../../lib/gaps'
+import { toBlob } from '../../lib/blob'
+import { type Segment, relativePaths, useJob } from '../../store/useJob'
 import { ClipEditor } from './ClipEditor'
 import { SegmentRow } from './SegmentRow'
 import { Waveform, type WaveRegion } from './Waveform'
@@ -231,9 +231,7 @@ export function EditorScreen() {
           onCreate={addClip}
         />
         <p className="help timeline-hint">
-          Click a clip to pick it, drag its edges to make it longer or shorter. Drag
-          across an empty stretch to add a clip there, or use <strong>add a clip</strong>
-          {' '}below to put one at the playhead.
+          Drag a clip's edges to trim it, drag an empty stretch to add one.
         </p>
       </div>
 
@@ -245,9 +243,7 @@ export function EditorScreen() {
               className="button is-small"
               disabled={!spot}
               title={
-                spot
-                  ? `Add a clip at ${formatTime(spot[0])} (n), then drag its edges`
-                  : 'There is no gap left to put one in'
+                spot ? `Add a clip at ${formatTime(spot[0])} (n)` : 'There is no gap left'
               }
               onClick={() => spot && addClip(spot[0], spot[1])}
             >

@@ -1,22 +1,34 @@
 # make-chatsounds
 
-Cut one long recording into named chatsound clips, entirely in the browser.
+Get sounds into a chatsounds repo, entirely in the browser. Three tabs:
 
-Drop in an audio or video file. It finds where each voice line starts and ends,
-transcribes it, names the clip after what is said, and gives you an editor to fix
-what the machine got wrong: trim, extend, split, merge, rename, add one it missed.
-Then it hands you a ZIP of `.ogg` files whose names are already legal chatsounds
-triggers.
+- **Extract**, the helper: cut one long recording into named clips. It finds
+  where each voice line starts and ends, transcribes it, names the clip after
+  what is said, and gives you an editor to fix what the machine got wrong: trim,
+  extend, split, merge, rename, add one it missed. Ends in a ZIP of `.ogg` files
+  whose names are already legal chatsounds triggers.
+- **Upload**, the real pipeline: sort `.ogg` files into *realms* (the folder a
+  sound belongs to in the repo). Realm names autocomplete from the live
+  Metastruct repo, new ones are allowed, each realm is a drag-and-drop area, and
+  every dropped file is checked against what the game can play (Vorbis,
+  44.1 kHz, mono or stereo) by reading its header. The end of this pipeline,
+  signing in with GitHub and opening the pull request, is not built yet; the
+  form says so rather than pretending.
+- **Review**, a placeholder for looking over uploads before they land.
 
-**Scope.** This screen ends at the clips. Getting them into the right folder of the
-right repository is a separate job, meant for a separate tab: signing in with GitHub
-and opening the pull request. So nothing here asks you to name a pack, choose a base
-path, or think about realms, and the zip carries no folder to sit under.
+Extract deliberately knows nothing about realms and Upload nothing about
+recordings: the bridge between them is a downloaded zip, until the PR flow
+exists to be the bridge.
 
-**Nothing is uploaded.** Decoding, voice detection, transcription and Ogg Vorbis
-encoding all happen in the tab. The server is an nginx container serving static
-files, with no database, no uploads directory and no per-user state, so it
-costs the same to host for one person as for a hundred.
+**Nothing is uploaded** (the tab name notwithstanding, for now). Decoding, voice
+detection, transcription, Ogg Vorbis encoding and file validation all happen in
+the tab. The server is an nginx container serving static files, with no
+database, no uploads directory and no per-user state, so it costs the same to
+host for one person as for a hundred. The two third-party requests are the
+speech model from the Hugging Face CDN and one GitHub API call for the realm
+list (`sound/chatsounds/autoadd` in `Metastruct/garrysmod-chatsounds`, cached in
+localStorage for an hour because the API allows 60 unauthenticated calls per
+hour per IP).
 
 Built for [neo-chatsounds](https://github.com/Earu/neo-chatsounds) and
 [garrysmod-chatsounds](https://github.com/Metastruct/garrysmod-chatsounds).
@@ -138,8 +150,7 @@ A few consequences worth knowing:
 - **Everything is held in memory.** A 90-minute recording is roughly 500 MB of
   decoded audio once resampled. Minutes-long voice-line dumps are the intended
   case; feature-length files will strain a tab.
-- **A reload loses the work.** There is nowhere to save it to; the app leaves a
-  breadcrumb naming the last file you worked on and asks you to open it again.
+- **A reload loses the work.** There is nowhere to save it to.
 - **mkv and avi cannot be decoded by any browser.** The app says so and tells you
   the one-line ffmpeg remux to run. mp4/m4a/mov depend on AAC being available:
   Chrome and Edge ship it, Firefox borrows it from the system, and Chromium builds
@@ -256,9 +267,9 @@ therefore terminates the worker, rebuilds the 16 kHz working audio from the
 master (it was transferred, not copied), and starts over, saying so on the
 progress screen rather than silently rewinding the stage list.
 
-Weights are fetched from the Hugging Face CDN and cached by the browser. That is
-the one third-party request the app makes. Everything else, including the fonts
-and the VAD model, is served from your own origin. To remove it entirely, mirror
+Weights are fetched from the Hugging Face CDN and cached by the browser. That
+and the realm list are the only third-party requests the app makes. Everything
+else, including the fonts and the VAD model, is served from your own origin. To remove it entirely, mirror
 the model files and point `env.remoteHost` in `src/pipeline/asr.ts` at your copy.
 
 ### onnxruntime and its WebAssembly
@@ -290,7 +301,7 @@ copies means two `env` objects: configuring one leaves the other on the CDN.
 cd frontend
 npm install
 npm run dev     # http://localhost:5173
-npm test        # 100 unit tests
+npm test        # 112 unit tests
 npm run build
 ```
 
@@ -298,22 +309,28 @@ The tests cover the parts that have to be exactly right: the trigger rules
 (including a round-trip through a reimplementation of the addon's own key
 derivation, so the names written to disk survive what the loader does to them),
 the segmenter's boundary and splitting logic, the envelope reader, the zip layout,
-where a hand-drawn clip is allowed to land, that onnxruntime is told where both
-halves of its WebAssembly are, and that the backend fallback ladder always
-terminates.
+where a hand-drawn clip is allowed to land, the ogg header parser the Upload form
+screens files with (verified against real ffmpeg output as well as crafted bytes),
+realm-name folding, that onnxruntime is told where both halves of its WebAssembly
+are, and that the backend fallback ladder always terminates.
 
 ### Layout
 
 ```
 frontend/src/
 ├── pipeline/     decode · vad · asr · segmenter · naming · encode · pack
-│                 plus gpu (is there a WebGPU adapter, and why not), ort (where
+│                 plus ogg (what is really inside an .ogg, from its header),
+│                 gpu (is there a WebGPU adapter, and why not), ort (where
 │                 onnxruntime finds its own WebAssembly) and attempts (what to
 │                 try next when the backend fails)
 ├── workers/      the VAD/ASR/encode worker -- Web Audio is main-thread only,
 │                 so decoding stays outside it and everything else moves in
-├── store/        job state, worker client, IndexedDB breadcrumb
-├── components/   upload · processing · editor · waveform · clip editor
+├── store/        useJob (Extract) · useUpload (Upload) · worker client
+├── lib/          realm list fetch/cache · gap finding · formatting · icons
+├── components/
+│   ├── extract/  start · processing · editor · waveform · clip editor
+│   ├── upload/   the realm form: combobox · drop area · footer stub
+│   └──           Navbar (the three tabs) · Icon · ReviewTab
 └── styles/       design tokens taken from metastruct.net
 ```
 

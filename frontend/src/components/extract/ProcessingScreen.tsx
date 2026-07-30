@@ -1,4 +1,4 @@
-import { useJob } from '../store/useJob'
+import { useJob } from '../../store/useJob'
 
 const STAGES = [
   { key: 'decoding', label: 'Opening the file', note: 'pulling the audio out of it' },
@@ -114,9 +114,7 @@ export function ProcessingScreen() {
                             <p className="muted is-loading-pulse">connecting…</p>
                           )}
                           <p className="muted download-note">
-                            The total grows as more parts turn up. Nothing of yours is
-                            being sent anywhere, this is the model coming down to you,
-                            and only the first time.
+                            The total grows as more parts turn up.
                           </p>
                         </div>
                       )}
@@ -127,8 +125,7 @@ export function ProcessingScreen() {
             </ol>
 
             <p className="muted" style={{ marginTop: '2rem' }}>
-              This all happens in this tab, so keep it open and in front. Browsers
-              slow down tabs in the background.
+              Keep this tab open and in front, browsers slow background tabs down.
             </p>
           </>
         )}

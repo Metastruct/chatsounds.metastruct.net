@@ -88,6 +88,34 @@ export function fallbackTrigger(position: number): string {
 }
 
 /**
+ * Normalise a newly typed realm name to the repo's convention.
+ *
+ * A realm is a folder in the chatsounds repo, and unlike triggers it is only
+ * lowercased at load time -- no underscore-to-space step -- so snake_case is both
+ * allowed and the established convention (`2000s_memes`, `portal_turret`). A few
+ * grandfathered folders contain spaces, which is why names picked from the
+ * existing list are taken verbatim and only *new* ones come through here.
+ *
+ * Returns '' rather than inventing a fallback: an unusable realm name is the
+ * caller's problem to surface, not to paper over.
+ */
+export function sanitizeRealm(name: string): string {
+  const folded = (name || '')
+    .normalize('NFKD')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[^\x00-\x7F]/g, '')
+    .toLowerCase()
+  const cleaned = folded
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/_{2,}/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 64)
+    .replace(/_+$/, '')
+  if (!cleaned || RESERVED.has(cleaned)) return ''
+  return cleaned
+}
+
+/**
  * Make a name safe to hand to a download.
  *
  * Nothing like as strict as `sanitizeTrigger`: this names the zip, not a sound, so

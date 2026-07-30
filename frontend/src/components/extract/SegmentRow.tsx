@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { sanitizeTrigger } from '../pipeline/naming'
-import type { Segment } from '../store/useJob'
-import { useJob } from '../store/useJob'
-import { FLAG_LABELS, formatTime } from '../lib/format'
-import { Icon } from './Icon'
+import { sanitizeTrigger } from '../../pipeline/naming'
+import type { Segment } from '../../store/useJob'
+import { useJob } from '../../store/useJob'
+import { FLAG_LABELS, formatTime } from '../../lib/format'
+import { Icon } from '../Icon'
 
 interface Props {
   segment: Segment

@@ -1,33 +1,29 @@
 import { useEffect, useRef, useState } from 'react'
-import { MODELS } from '../pipeline/asr'
+import { MODELS } from '../../pipeline/asr'
 import {
   type BackendChoice,
   type GpuStatus,
   browserFamily,
   gpuStatus,
-} from '../pipeline/gpu'
-import { ACCEPTED_EXTENSIONS, describeUnsupported } from '../pipeline/decode'
-import { type LastJob, loadJob } from '../store/persist'
-import { DEFAULTS, useJob } from '../store/useJob'
-import type { AnalyzeOptions } from '../workers/pipeline.worker'
+} from '../../pipeline/gpu'
+import { ACCEPTED_EXTENSIONS, describeUnsupported } from '../../pipeline/decode'
+import { DEFAULTS, useJob } from '../../store/useJob'
+import type { AnalyzeOptions } from '../../workers/pipeline.worker'
 
 const ACCEPT = ACCEPTED_EXTENSIONS.join(',')
 
-export function UploadScreen() {
+export function StartScreen() {
   const start = useJob((state) => state.start)
   const inputRef = useRef<HTMLInputElement | null>(null)
 
-  const [showSettings, setShowSettings] = useState(false)
   const [options, setOptions] = useState<AnalyzeOptions>({})
   const [dragging, setDragging] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [gpu, setGpu] = useState<GpuStatus | null>(null)
   const threaded = typeof SharedArrayBuffer !== 'undefined'
-  const [last, setLast] = useState<LastJob | null>(null)
 
   useEffect(() => {
     void gpuStatus().then(setGpu)
-    void loadJob().then(setLast)
   }, [])
 
   const send = (file: File) => {
@@ -70,8 +66,7 @@ export function UploadScreen() {
         />
         <p className="title is-4">Drop a recording here</p>
         <p className="muted">
-          Audio or video: mp3, wav, ogg, flac, m4a, opus, mp4, webm, mov. Nothing
-          leaves your computer, it all happens in this tab.
+          Audio or video: mp3, wav, ogg, flac, m4a, opus, mp4, webm, mov.
         </p>
       </div>
 
@@ -80,24 +75,6 @@ export function UploadScreen() {
           {error}
         </div>
       )}
-
-      {last && (
-        <p className="muted" style={{ marginTop: '1rem' }}>
-          Last time you opened <strong>{last.filename}</strong> and got{' '}
-          {last.segmentCount} clips. Since nothing was saved anywhere, open that file
-          again to carry on.
-        </p>
-      )}
-
-      <div className="upload-options">
-        <button
-          type="button"
-          className="button"
-          onClick={() => setShowSettings((value) => !value)}
-        >
-          {showSettings ? 'Hide' : 'Show'} more settings
-        </button>
-      </div>
 
       {gpu && !gpu.available && (
         <div className="notification is-warning" style={{ marginTop: '1rem' }}>
@@ -113,119 +90,113 @@ export function UploadScreen() {
         </div>
       )}
 
-      {showSettings && (
-        <div className="panel settings-grid fade-in">
-          <div className="field">
-            <label className="label" htmlFor="model">
-              How carefully to listen
-            </label>
-            <div className="select">
-              <select
-                id="model"
-                value={options.modelId ?? MODELS[1].id}
-                onChange={(event) => setOptions((o) => ({ ...o, modelId: event.target.value }))}
-              >
-                {MODELS.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.label} ({model.size})
-                    {/* Naming the cost where the choice is made: without a
-                        graphics card these two take several times the length of
-                        the recording, which a download size does not hint at. */}
-                    {model.wantsGpu && gpu && !gpu.available
-                      ? ' (very slow without WebGPU)'
-                      : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <p className="help">
-              Downloaded once, then kept by your browser. The bigger ones get more
-              names right and take longer.
-            </p>
+      <div className="panel settings-grid">
+        <div className="field">
+          <label className="label" htmlFor="model">
+            How carefully to listen
+          </label>
+          <div className="select">
+            <select
+              id="model"
+              value={options.modelId ?? MODELS[1].id}
+              onChange={(event) => setOptions((o) => ({ ...o, modelId: event.target.value }))}
+            >
+              {MODELS.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.label} ({model.size})
+                  {/* Naming the cost where the choice is made: without a
+                      graphics card these two take several times the length of
+                      the recording, which a download size does not hint at. */}
+                  {model.wantsGpu && gpu && !gpu.available
+                    ? ' (very slow without WebGPU)'
+                    : ''}
+                </option>
+              ))}
+            </select>
           </div>
-
-          <div className="field">
-            <label className="label" htmlFor="backend">
-              Use the graphics card
-            </label>
-            <div className="select">
-              <select
-                id="backend"
-                value={options.backend ?? DEFAULTS.backend}
-                onChange={(event) =>
-                  setOptions((o) => ({ ...o, backend: event.target.value as BackendChoice }))
-                }
-              >
-                <option value="auto">When it is known to work</option>
-                <option value="webgpu">Always, even if it may fail</option>
-                <option value="wasm">Never, use the processor</option>
-              </select>
-            </div>
-            <p className="help">
-              {!gpu
-                ? 'The graphics card is several times faster where it works.'
-                : !gpu.available
-                  ? 'There is no graphics card available here, so this runs on the processor either way.'
-                  : browserFamily() === 'firefox'
-                    ? "Firefox's WebGPU still gives out partway through this model, so it is skipped by default. You can insist on it, and if it does give out the run simply starts again on the processor."
-                    : 'The graphics card is several times faster. If it gives out, the run starts again on the processor.'}
-            </p>
-          </div>
-
-          <div className="field">
-            <label className="label" htmlFor="lang">
-              Language
-            </label>
-            <input
-              id="lang"
-              className="input"
-              placeholder="work it out"
-              value={options.language ?? ''}
-              onChange={(event) => setOptions((o) => ({ ...o, language: event.target.value }))}
-            />
-            <p className="help">
-              A two letter code such as <code>en</code>. Setting it helps with short or
-              noisy recordings.
-            </p>
-          </div>
-
-          <Slider
-            id="threshold"
-            label="How quiet still counts as speech"
-            value={options.vadThreshold ?? DEFAULTS.vadThreshold}
-            min={0.1}
-            max={0.9}
-            step={0.05}
-            format={(v) => v.toFixed(2)}
-            help="Lower picks up quiet speech, and more background noise with it. Higher keeps only clear speech."
-            onChange={(vadThreshold) => setOptions((o) => ({ ...o, vadThreshold }))}
-          />
-
-          <Slider
-            id="silence"
-            label="Pause between lines"
-            value={options.vadMinSilenceMs ?? DEFAULTS.vadMinSilenceMs}
-            min={50}
-            max={1500}
-            step={25}
-            format={(v) => `${v} ms`}
-            help="How much quiet it takes to end a line. Raise it if single lines keep getting cut in half."
-            onChange={(vadMinSilenceMs) => setOptions((o) => ({ ...o, vadMinSilenceMs }))}
-          />
-
-          <Slider
-            id="maxline"
-            label="Longest line"
-            value={options.maxLineS ?? DEFAULTS.maxLineS}
-            min={2}
-            max={30}
-            step={1}
-            format={(v) => `${v}s`}
-            help="Anything longer gets cut in two at its best pause."
-            onChange={(maxLineS) => setOptions((o) => ({ ...o, maxLineS }))}
-          />
+          <p className="help">Bigger gets more names right, and takes longer.</p>
         </div>
-      )}
+
+        <div className="field">
+          <label className="label" htmlFor="backend">
+            Use the graphics card
+          </label>
+          <div className="select">
+            <select
+              id="backend"
+              value={options.backend ?? DEFAULTS.backend}
+              onChange={(event) =>
+                setOptions((o) => ({ ...o, backend: event.target.value as BackendChoice }))
+              }
+            >
+              <option value="auto">When it is known to work</option>
+              <option value="webgpu">Always, even if it may fail</option>
+              <option value="wasm">Never, use the processor</option>
+            </select>
+          </div>
+          {/* Only said when there is something to know: the default quietly
+              avoiding the graphics card is the one surprising case. */}
+          {gpu?.available && browserFamily() === 'firefox' && (
+            <p className="help">
+              Firefox's WebGPU still fails partway through, so it is skipped by
+              default. If you force it and it fails, the run starts again on the
+              processor.
+            </p>
+          )}
+        </div>
+
+        <div className="field">
+          <label className="label" htmlFor="lang">
+            Language
+          </label>
+          <input
+            id="lang"
+            className="input"
+            placeholder="work it out"
+            value={options.language ?? ''}
+            onChange={(event) => setOptions((o) => ({ ...o, language: event.target.value }))}
+          />
+          <p className="help">
+            A two letter code such as <code>en</code>. Helps with noisy recordings.
+          </p>
+        </div>
+
+        <Slider
+          id="threshold"
+          label="How quiet still counts as speech"
+          value={options.vadThreshold ?? DEFAULTS.vadThreshold}
+          min={0.1}
+          max={0.9}
+          step={0.05}
+          format={(v) => v.toFixed(2)}
+          help="Lower catches quiet speech, and more noise with it."
+          onChange={(vadThreshold) => setOptions((o) => ({ ...o, vadThreshold }))}
+        />
+
+        <Slider
+          id="silence"
+          label="Pause between lines"
+          value={options.vadMinSilenceMs ?? DEFAULTS.vadMinSilenceMs}
+          min={50}
+          max={1500}
+          step={25}
+          format={(v) => `${v} ms`}
+          help="Raise it if single lines keep getting cut in half."
+          onChange={(vadMinSilenceMs) => setOptions((o) => ({ ...o, vadMinSilenceMs }))}
+        />
+
+        <Slider
+          id="maxline"
+          label="Longest line"
+          value={options.maxLineS ?? DEFAULTS.maxLineS}
+          min={2}
+          max={30}
+          step={1}
+          format={(v) => `${v}s`}
+          help="Anything longer gets cut in two at its best pause."
+          onChange={(maxLineS) => setOptions((o) => ({ ...o, maxLineS }))}
+        />
+      </div>
     </div>
   )
 }

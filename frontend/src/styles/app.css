@@ -21,22 +21,130 @@
   border-color: var(--accent-2-dk);
 }
 
-/* Centred rather than bottom-aligned: the field is a label, a control and a line
-   of help, so aligning on its bottom edge hung the button below the input it sits
-   next to. */
-.upload-options {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  margin-top: 1.5rem;
-  flex-wrap: wrap;
-}
-
 .settings-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 1.25rem;
   margin-top: 1rem;
+}
+
+/* --- upload tab ----------------------------------------------------------- */
+
+.upload-tab {
+  max-width: 52rem;
+}
+
+.realm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 1.5rem 0 1rem;
+}
+
+.realm-area {
+  padding: 0.9rem 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.realm-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.realm-count {
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.realm-input {
+  position: relative;
+  width: 100%;
+  max-width: 20rem;
+}
+/* Same panel treatment as the navbar dropdowns: this is a menu, not a card. */
+.realm-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 2px;
+  background: var(--chrome);
+  border-radius: var(--radius-lg);
+  padding: 0.35rem 0;
+  max-height: 16rem;
+  overflow-y: auto;
+  z-index: 20;
+  box-shadow: 0 0.5em 1em -0.125em rgba(10, 10, 10, 0.4),
+    0 0 0 1px rgba(10, 10, 10, 0.1);
+}
+.realm-suggestion {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.3rem 0.9rem;
+  font-size: 0.85rem;
+  font-family: var(--mono);
+  color: var(--text-2);
+  background: none;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.realm-suggestion.is-highlighted {
+  background: var(--accent-2-dk);
+  color: var(--text);
+}
+/* The row that makes something rather than picks it earns the accent. */
+.realm-suggestion.is-new {
+  color: var(--accent);
+  font-family: var(--font);
+}
+.realm-suggestion.is-new.is-highlighted {
+  color: var(--accent-hi);
+}
+
+.dropzone.is-compact {
+  padding: 1.1rem 1rem;
+}
+
+.realm-files {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.realm-file {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto var(--control-h-sm);
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.15rem 0.25rem;
+  font-size: 0.9rem;
+}
+.realm-file-name {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.realm-file .muted {
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.upload-foot {
+  margin-top: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.upload-foot .help {
+  margin: 0;
 }
 
 /* --- processing ---------------------------------------------------------- */

@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { type Envelope, windowPeaks } from '../pipeline/envelope'
-import type { Segment } from '../store/useJob'
-import { formatTime } from '../lib/format'
+import { type Envelope, windowPeaks } from '../../pipeline/envelope'
+import type { Segment } from '../../store/useJob'
+import { formatTime } from '../../lib/format'
 import { Waveform } from './Waveform'
 
 interface Props {

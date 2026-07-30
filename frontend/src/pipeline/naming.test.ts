@@ -5,6 +5,7 @@ import {
   neoChatsoundsKey,
   resolvePaths,
   safeFileName,
+  sanitizeRealm,
   sanitizeTrigger,
 } from './naming'
 
@@ -136,6 +137,25 @@ describe('round trip through the addon', () => {
       const trigger = sanitizeTrigger(raw)
       expect(neoChatsoundsKey(trigger)).toBe(trigger)
     }
+  })
+})
+
+describe('sanitizeRealm', () => {
+  it('keeps snake_case, which is the repo convention', () => {
+    expect(sanitizeRealm('2000s_memes')).toBe('2000s_memes')
+  })
+
+  it('folds a typed name into it', () => {
+    expect(sanitizeRealm('Portal Turret!')).toBe('portal_turret')
+    // The accent goes, the letter under it stays.
+    expect(sanitizeRealm('Café Sounds')).toBe('cafe_sounds')
+  })
+
+  it('returns nothing rather than inventing a name', () => {
+    expect(sanitizeRealm('!!!')).toBe('')
+    expect(sanitizeRealm('')).toBe('')
+    // `sh` is reserved by the addon for stopping playback.
+    expect(sanitizeRealm('sh')).toBe('')
   })
 })
 
