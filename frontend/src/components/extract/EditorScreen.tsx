@@ -95,7 +95,7 @@ export function EditorScreen() {
         player.stop()
         return
       }
-      player.playRange(segment.startS, segment.endS)
+      player.playRange(segment.startS, segment.endS, segment.gainDb)
     },
     [player],
   )
@@ -353,7 +353,7 @@ export function EditorScreen() {
                   duration={durationS}
                   playhead={player.time > 0 ? player.time : null}
                   onCommit={(bounds) => patch(selected.id, bounds)}
-                  onScrub={(seconds) => player.playRange(seconds, selected.endS)}
+                  onScrub={(seconds) => player.playRange(seconds, selected.endS, selected.gainDb)}
                 />
 
                 <div className="row is-tight wrap">
@@ -397,9 +397,13 @@ export function EditorScreen() {
                     max={20}
                     step={0.5}
                     value={selected.gainDb}
-                    onChange={(event) =>
-                      patch(selected.id, { gainDb: Number(event.target.value) })
-                    }
+                    onChange={(event) => {
+                      const gainDb = Number(event.target.value)
+                      patch(selected.id, { gainDb })
+                      // Heard straight away if the clip is playing, rather than
+                      // only on the next press of play.
+                      player.setGain(gainDb)
+                    }}
                   />
                 </div>
 

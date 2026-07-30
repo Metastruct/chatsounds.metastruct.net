@@ -15,6 +15,9 @@ export function usePlayer(master: Float32Array | null) {
   const contextRef = useRef<AudioContext | null>(null)
   const bufferRef = useRef<AudioBuffer | null>(null)
   const sourceRef = useRef<AudioBufferSourceNode | null>(null)
+  // Preview has to hear the clip's gain, or the slider looks broken: the
+  // exported file is quieter or louder and the preview never changes.
+  const gainRef = useRef<GainNode | null>(null)
   const startedAtRef = useRef(0)
   const offsetRef = useRef(0)
   const rafRef = useRef<number | null>(null)
@@ -55,17 +58,23 @@ export function usePlayer(master: Float32Array | null) {
   }, [])
 
   const playRange = useCallback(
-    (fromS: number, toS?: number) => {
+    (fromS: number, toS?: number, gainDb = 0) => {
       const context = contextRef.current
       const buffer = bufferRef.current
       if (!context || !buffer) return
       stop()
       void context.resume()
 
+      const gain = (gainRef.current ??= context.createGain())
+      // Same conversion the encoder uses, so what is heard matches what is
+      // written. Clamped, because the slider allows enough boost to clip.
+      gain.gain.value = gainDb === 0 ? 1 : Math.min(10 ** (gainDb / 20), 8)
+      gain.connect(context.destination)
+
       const from = Math.max(0, Math.min(fromS, buffer.duration))
       const source = context.createBufferSource()
       source.buffer = buffer
-      source.connect(context.destination)
+      source.connect(gain)
       source.onended = () => {
         if (sourceRef.current === source) stop()
       }
@@ -91,6 +100,12 @@ export function usePlayer(master: Float32Array | null) {
     setTime(offsetRef.current)
   }, [])
 
+  /** Change the level of whatever is playing, so the slider is audible as it moves. */
+  const setGain = useCallback((gainDb: number) => {
+    const gain = gainRef.current
+    if (gain) gain.gain.value = gainDb === 0 ? 1 : Math.min(10 ** (gainDb / 20), 8)
+  }, [])
+
   useEffect(
     () => () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
@@ -99,5 +114,5 @@ export function usePlayer(master: Float32Array | null) {
     [],
   )
 
-  return { time, playing, playRange, stop, seek }
+  return { time, playing, playRange, stop, seek, setGain }
 }
