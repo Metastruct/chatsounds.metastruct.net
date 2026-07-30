@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { REALM_ROOT, fileRefFromComment, prSummary, repoPath, statusFrom } from './github'
 
 const review = (reviewer: string, state: string) => ({
+  id: 0,
   reviewer,
   state,
   body: '',
   submittedAt: '',
+  url: '',
 })
 
 describe('fileRefFromComment', () => {

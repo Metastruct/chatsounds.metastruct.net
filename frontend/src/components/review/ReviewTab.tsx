@@ -212,6 +212,25 @@ function PrView({ token, myLogin }: { token: string; myLogin: string }) {
           </p>
         )}
 
+        {/* Said about the pull request rather than any one sound, which is where
+            the reason behind a Deny all ends up. */}
+        {review.messages.length > 0 && (
+          <div className="pr-messages">
+            {review.messages.map((message) => (
+              <p key={message.id} className="pr-message">
+                <a href={message.url} target="_blank" rel="noreferrer">
+                  {message.author}
+                </a>
+                {message.state === 'CHANGES_REQUESTED' && (
+                  <span className="tag is-danger">wants changes</span>
+                )}
+                {message.state === 'APPROVED' && <span className="tag is-accent">approved</span>}
+                <span className="muted">{message.body}</span>
+              </p>
+            ))}
+          </div>
+        )}
+
         {review.rights === 'onlooker' && (
           <p className="muted">
             Ruling on this needs push access on the repo. You can still listen to

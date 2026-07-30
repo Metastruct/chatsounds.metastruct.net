@@ -79,6 +79,8 @@ interface ReviewState {
   others: OtherFile[]
   reviews: ReviewEntry[]
   comments: FileComment[]
+  /** Said about the pull request rather than about any one sound. */
+  messages: GlobalMessage[]
   loading: string | null
   busy: boolean
   merged: boolean
@@ -94,40 +96,63 @@ interface ReviewState {
   merge: (token: string) => Promise<void>
 }
 
+/** Something said about the pull request as a whole, rather than about a file. */
+export interface GlobalMessage {
+  id: string
+  author: string
+  body: string
+  url: string
+  /** A review's verdict, when it came with one. */
+  state?: string
+}
+
 /**
- * Every comment about a file, wherever it was left.
+ * Everything anyone has said, sorted into what is about a file and what is not.
  *
- * Comments attached to files come back as they are. Conversation comments are
- * only included when they name a file the way the deny fallback writes them,
- * so an objection that could not be attached still shows under its sound rather
- * than living only on GitHub.
+ * Three places carry text: comments attached to files, the conversation, and
+ * the bodies of reviews. A denial can end up in any of them, so all three are
+ * read and any that names a file, the way the deny fallback writes it, is shown
+ * under that sound. What is left over is about the pull request as a whole,
+ * which is how the reason behind a Deny all reaches the screen.
  */
-async function commentsForFiles(
+async function readEverythingSaid(
   token: string,
   number: number,
   sounds: ReviewSound[],
-): Promise<FileComment[]> {
+  reviews: ReviewEntry[],
+): Promise<{ comments: FileComment[]; messages: GlobalMessage[] }> {
   const [onFiles, conversation] = await Promise.all([
-    listFileComments(token, number),
+    listFileComments(token, number).catch(() => []),
     listPrComments(token, number).catch(() => []),
   ])
 
   const byRef = new Map(sounds.map((sound) => [`${sound.realm}/${sound.name}`, sound.path]))
-  const carried: FileComment[] = []
-  for (const comment of conversation) {
-    const parsed = fileRefFromComment(comment.body)
+  const comments: FileComment[] = [...onFiles]
+  const messages: GlobalMessage[] = []
+
+  const sort = (
+    id: string,
+    body: string,
+    author: string,
+    url: string,
+    origin: FileComment['origin'],
+    state?: string,
+  ) => {
+    if (!body.trim()) return
+    const parsed = fileRefFromComment(body)
     const path = parsed && byRef.get(parsed.ref)
-    if (!parsed || !path) continue
-    carried.push({
-      id: comment.id,
-      path,
-      body: parsed.text,
-      author: comment.author,
-      url: comment.url,
-      origin: 'conversation',
-    })
+    if (parsed && path) comments.push({ id, path, body: parsed.text, author, url, origin })
+    else messages.push({ id, author, body, url, state })
   }
-  return [...onFiles, ...carried]
+
+  for (const comment of conversation) {
+    sort(`c${comment.id}`, comment.body, comment.author, comment.url, 'conversation')
+  }
+  for (const review of reviews) {
+    sort(`r${review.id}`, review.body, review.reviewer, review.url, 'review', review.state)
+  }
+
+  return { comments, messages }
 }
 
 /**
@@ -140,7 +165,8 @@ async function commentsForFiles(
 function withMyVerdict(reviews: ReviewEntry[], me: string, state: string): ReviewEntry[] {
   return [
     ...reviews.filter((review) => review.reviewer !== me),
-    { reviewer: me, state, body: '', submittedAt: new Date().toISOString() },
+    // A placeholder id: the refresh behind it replaces this with the real one.
+    { id: 0, reviewer: me, state, body: '', submittedAt: new Date().toISOString(), url: '' },
   ]
 }
 
@@ -153,6 +179,7 @@ export const useReview = create<ReviewState>((set, get) => ({
   others: [],
   reviews: [],
   comments: [],
+  messages: [],
   loading: null,
   busy: false,
   merged: false,
@@ -173,6 +200,7 @@ export const useReview = create<ReviewState>((set, get) => ({
       others: [],
       reviews: [],
       comments: [],
+      messages: [],
       error: null,
     })
     try {
@@ -217,6 +245,7 @@ export const useReview = create<ReviewState>((set, get) => ({
       others: [],
       reviews: [],
       comments: [],
+      messages: [],
       merged: false,
       error: null,
       loading: 'reading the pull request',
@@ -252,8 +281,8 @@ export const useReview = create<ReviewState>((set, get) => ({
       // Attribution needs the sounds, so the comments come after them rather
       // than alongside.
       set({ detail, sounds, others, reviews, merged: detail.merged })
-      void commentsForFiles(token, number, sounds).then((comments) => {
-        set((state) => (state.detail?.number === number ? { comments } : {}))
+      void readEverythingSaid(token, number, sounds, reviews).then((said) => {
+        set((state) => (state.detail?.number === number ? said : {}))
       })
 
       if (!detail.headOwner) {
@@ -283,6 +312,7 @@ export const useReview = create<ReviewState>((set, get) => ({
       others: [],
       reviews: [],
       comments: [],
+      messages: [],
       loading: null,
       error: null,
     })
@@ -401,15 +431,13 @@ async function refresh(
   sounds: ReviewSound[],
 ): Promise<void> {
   try {
-    const [reviews, comments] = await Promise.all([
-      listReviews(token, number),
-      commentsForFiles(token, number, sounds),
-    ])
+    const reviews = await listReviews(token, number)
+    const said = await readEverythingSaid(token, number, sounds, reviews)
     const status = statusFrom(reviews)
     set((state) => ({
       // Only if this pull request is still the one open, or a fast click
       // elsewhere would be overwritten by an answer about the previous one.
-      ...(state.detail?.number === number ? { reviews, comments } : {}),
+      ...(state.detail?.number === number ? { reviews, ...said } : {}),
       prs: state.prs?.map((pr) => (pr.number === number ? { ...pr, status } : pr)) ?? null,
     }))
   } catch {

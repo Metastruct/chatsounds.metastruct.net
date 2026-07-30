@@ -483,24 +483,35 @@ export async function fetchBlobBytes(
 }
 
 export interface ReviewEntry {
+  id: number
   reviewer: string
   state: string
   body: string
   submittedAt: string
+  url: string
 }
 
 /** Every submitted review, oldest first, as GitHub returns them. */
 export async function listReviews(token: string, number: number): Promise<ReviewEntry[]> {
   const { data } = await api<
-    { user: { login: string }; state: string; body: string; submitted_at: string }[]
+    {
+      id: number
+      user: { login: string }
+      state: string
+      body: string
+      submitted_at: string
+      html_url: string
+    }[]
   >(token, 'GET', `/repos/${UPSTREAM.owner}/${UPSTREAM.repo}/pulls/${number}/reviews?per_page=100`)
   return data
     .filter((review) => review.state !== 'PENDING')
     .map((review) => ({
+      id: review.id,
       reviewer: review.user.login,
       state: review.state,
       body: review.body ?? '',
       submittedAt: review.submitted_at,
+      url: review.html_url,
     }))
 }
 
@@ -535,7 +546,8 @@ export function statusFrom(reviews: ReviewEntry[]): PrStatus {
 }
 
 export interface FileComment {
-  id: number
+  /** Prefixed by source, so a review and a comment cannot collide. */
+  id: string
   path: string
   body: string
   author: string
@@ -544,7 +556,7 @@ export interface FileComment {
    * Where it was left. `conversation` means it could not be attached to the
    * file, so it names the file in its first line instead.
    */
-  origin: 'file' | 'conversation'
+  origin: 'file' | 'conversation' | 'review'
 }
 
 /**
@@ -591,7 +603,7 @@ export async function listFileComments(token: string, number: number): Promise<F
     { id: number; path: string; body: string; user: { login: string }; html_url: string }[]
   >(token, 'GET', `/repos/${UPSTREAM.owner}/${UPSTREAM.repo}/pulls/${number}/comments?per_page=100`)
   return data.map((comment) => ({
-    id: comment.id,
+    id: `f${comment.id}`,
     path: comment.path,
     body: comment.body,
     author: comment.user.login,
@@ -627,7 +639,7 @@ export async function postFileComment(
     subject_type: 'file',
   })
   return {
-    id: data.id,
+    id: `f${data.id}`,
     path: data.path,
     body: data.body,
     author: data.user.login,

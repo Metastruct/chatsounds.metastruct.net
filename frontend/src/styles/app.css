@@ -328,6 +328,26 @@
   flex-wrap: wrap;
 }
 
+.pr-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  background: var(--panel-sunken);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.8rem;
+}
+.pr-message {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.pr-message a {
+  font-weight: 600;
+}
+
 /* --- processing ---------------------------------------------------------- */
 
 .processing {
