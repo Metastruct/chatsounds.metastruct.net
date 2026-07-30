@@ -36,8 +36,24 @@ server {
     add_header Cross-Origin-Resource-Policy same-origin always;
 
     gzip on;
-    gzip_types text/css application/javascript application/json application/wasm image/svg+xml;
+    gzip_types text/css text/javascript application/javascript application/json application/wasm image/svg+xml;
     gzip_min_length 1024;
+
+    # nginx's mime.types knows .js and .wasm but not .mjs, so onnxruntime's glue
+    # module went out as application/octet-stream and the browser refused to
+    # execute it: "error loading dynamically imported module". Module scripts are
+    # MIME-checked strictly, so the type is not cosmetic. This block sits before
+    # the /assets/ one because nginx takes the first matching regex location, and
+    # it repeats the headers because a location with its own add_header does not
+    # inherit the server's.
+    location ~* \.mjs$ {
+        types { text/javascript mjs; }
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        add_header Cross-Origin-Opener-Policy same-origin always;
+        add_header Cross-Origin-Embedder-Policy require-corp always;
+        add_header Cross-Origin-Resource-Policy same-origin always;
+    }
 
     # --- GitHub sign-in ----------------------------------------------------
     # The device flow needs two calls to github.com, which sends no CORS
