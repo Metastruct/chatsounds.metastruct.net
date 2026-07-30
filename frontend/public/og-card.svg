@@ -31,10 +31,12 @@
   <text x="96" y="378" fill="#09b387" font-family="'Open Sans', 'Segoe UI', system-ui, sans-serif"
         font-size="42" font-weight="600">for Garry's Mod</text>
 
+  <!-- Kept in step with the description in index.html; a card that says
+       something different from the text beside it looks like a mistake. -->
   <text x="96" y="470" fill="#bdbdbd" font-family="'Open Sans', 'Segoe UI', system-ui, sans-serif"
-        font-size="32">Cut a recording into named clips, sort them into realms,</text>
+        font-size="32">Cut a file into named chatsound clips, sort them</text>
   <text x="96" y="514" fill="#bdbdbd" font-family="'Open Sans', 'Segoe UI', system-ui, sans-serif"
-        font-size="32">and open the pull request. All in your browser.</text>
+        font-size="32">into groups, and upload them for review.</text>
 
   <!-- A waveform, since that is what the tool shows you most of the time. -->
   <g fill="#09b387" opacity="0.85">
