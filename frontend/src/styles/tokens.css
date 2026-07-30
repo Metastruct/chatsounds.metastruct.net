@@ -1,0 +1,83 @@
+/*
+ * Design tokens lifted from metastruct.net.
+ *
+ * The site is Nuxt 2 + a recompiled dark Bulma; rather than pull Bulma in we
+ * reproduce the handful of values that actually carry the look. The one that
+ * matters most is the two-accent split: teal says "you can act on this", purple
+ * says "you are interacting with this". Keep that distinction and everything
+ * else falls into place.
+ *
+ * Note the 14px root -- theirs too. Every rem below is x14, not x16.
+ */
+
+@font-face {
+  font-family: 'Open Sans';
+  font-style: normal;
+  font-weight: 300 800;
+  font-display: swap;
+  src: url('/fonts/open-sans-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  /* surfaces */
+  --bg: #212121;
+  --chrome: #171717;
+  --panel: #4a4a4a;
+  --panel-inset: rgba(18, 18, 18, 0.33);
+  --panel-sunken: rgba(13, 13, 13, 0.36);
+  --border: #171717;
+  --border-soft: #353535;
+  --btn: #111;
+  --btn-border: #0d0d0d;
+
+  /* affordance */
+  --accent: #09b387;
+  --accent-hi: #0ce3ac;
+  --accent-dim: rgba(9, 179, 135, 0.25);
+
+  /* interaction state */
+  --accent-2: #9f4ba3;
+  --accent-2-dk: #7d3b80;
+  --ring: 0 0 0 0.125em rgba(125, 59, 128, 0.5);
+
+  /* text */
+  --text: #fefefe;
+  --text-2: #eee;
+  --text-3: #f1f1f1;
+  --text-muted: rgba(254, 254, 254, 0.5);
+  --text-ghost: rgba(255, 255, 255, 0.25);
+
+  /* semantic */
+  --info: #3e8ed0;
+  --success: #48c78e;
+  --warning: #ffe08a;
+  --danger: #f14668;
+  --code: #e9d682;
+
+  /* shape */
+  --radius: 4px;
+  --radius-lg: 6px;
+  --radius-pill: 9999px;
+  --shadow: 0 0 12px #0d0d0d;
+
+  /* Control geometry. Three heights, and no control is allowed a fourth.
+     Deliberately in rem rather than em: an em height is a function of the
+     element's own font-size, so every variant that set a smaller label silently
+     got a smaller box, and a row of controls that were all meant to line up came
+     out at six different heights. */
+  --control-h: 2.5rem;
+  --control-h-sm: 2rem;
+  --control-h-xs: 1.5rem;
+
+  /* rhythm */
+  --gutter: 0.75rem;
+  --font: 'Open Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* motion -- the whole site uses only these */
+  --t-fast: 0.1s ease-out;
+  --t-slow: 0.25s ease-out;
+}

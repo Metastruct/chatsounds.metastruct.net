@@ -1,0 +1,59 @@
+# Rendered at container start by 20-make-cert.sh, which substitutes __HTTPS_PORT__.
+
+# Plain HTTP exists only to send you to HTTPS. WebGPU and SharedArrayBuffer are
+# both restricted to secure contexts, so an http:// origin silently loses the GPU
+# and drops WebAssembly to a single thread.
+server {
+    listen 8080;
+    server_name _;
+    return 301 https://$host:__HTTPS_PORT__$request_uri;
+}
+
+server {
+    listen 8443 ssl;
+    http2 on;
+    server_name _;
+
+    ssl_certificate     /etc/nginx/certs/cert.pem;
+    ssl_certificate_key /etc/nginx/certs/key.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_session_cache   shared:SSL:4m;
+    ssl_session_timeout 1h;
+
+    # Deliberately no HSTS: this certificate is self-signed, and pinning the
+    # origin to HTTPS-only would strand anyone who later moves it behind a
+    # different name or a real certificate.
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # onnxruntime and transformers.js use multi-threaded WebAssembly, which needs
+    # SharedArrayBuffer, which browsers only expose to cross-origin-isolated
+    # pages. These two headers are what grant that.
+    add_header Cross-Origin-Opener-Policy same-origin always;
+    add_header Cross-Origin-Embedder-Policy require-corp always;
+    add_header Cross-Origin-Resource-Policy same-origin always;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json application/wasm image/svg+xml;
+    gzip_min_length 1024;
+
+    # Hashed build assets, the font, and the VAD model never change in place.
+    location ~* ^/(assets|fonts|models)/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        add_header Cross-Origin-Opener-Policy same-origin always;
+        add_header Cross-Origin-Embedder-Policy require-corp always;
+        add_header Cross-Origin-Resource-Policy same-origin always;
+    }
+
+    location = /index.html {
+        add_header Cache-Control "no-cache";
+        add_header Cross-Origin-Opener-Policy same-origin always;
+        add_header Cross-Origin-Embedder-Policy require-corp always;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

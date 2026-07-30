@@ -1,0 +1,41 @@
+{
+  "name": "make-chatsounds",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
+    "fflate": "^0.8.2",
+    "idb": "^8.0.0",
+    "onnxruntime-web": "1.26.0-dev.20260416-b7804b056c",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "wasm-media-encoders": "^0.7.0",
+    "zustand": "^5.0.2"
+  },
+  "//onnxruntime-web": [
+    "Pinned to the exact build @huggingface/transformers depends on, and forced on",
+    "it in turn, so the tab holds one onnxruntime rather than two. Two copies means",
+    "two `env` objects -- so pointing one at its WebAssembly leaves the other",
+    "fetching 23 MB from jsdelivr -- and two multi-megabyte runtimes in the bundle.",
+    "Bump this in step with @huggingface/transformers, to whatever it pins."
+  ],
+  "overrides": {
+    "onnxruntime-web": "$onnxruntime-web"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3",
+    "vitest": "^2.1.8"
+  }
+}

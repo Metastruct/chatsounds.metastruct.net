@@ -1,0 +1,677 @@
+/* Reset + the primitives layer. Roughly the subset of Bulma the site uses. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+h1,
+h2,
+h3,
+h4,
+p,
+ul,
+ol,
+li,
+figure,
+blockquote,
+dl,
+dd,
+fieldset {
+  margin: 0;
+  padding: 0;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+html {
+  font-size: 14px;
+  background: var(--bg);
+  scrollbar-gutter: stable;
+}
+
+body {
+  font-family: var(--font);
+  font-size: 1em;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+  transition: color var(--t-fast);
+}
+a:hover {
+  color: var(--accent-hi);
+}
+
+code,
+kbd {
+  font-family: var(--mono);
+  font-size: 0.875em;
+}
+
+code {
+  color: var(--code);
+  background: var(--chrome);
+  border-radius: var(--radius);
+  padding: 0.25em 0.5em;
+}
+
+kbd {
+  background: var(--chrome);
+  border: 1px solid var(--border-soft);
+  border-radius: 3px;
+  padding: 0.1em 0.4em;
+  color: var(--text-2);
+  font-size: 0.8em;
+}
+
+hr {
+  border: none;
+  height: 2px;
+  background: var(--chrome);
+  margin: 1.5rem 0;
+}
+
+/* --- typography ---------------------------------------------------------- */
+
+.title {
+  color: var(--text);
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1.125;
+  word-break: break-word;
+}
+.title.is-1 {
+  font-size: 3rem;
+}
+.title.is-4 {
+  font-size: 1.5rem;
+}
+.title.is-5 {
+  font-size: 1.25rem;
+}
+
+.subtitle {
+  color: var(--text-2);
+  font-size: 1.25rem;
+  font-weight: 400;
+  line-height: 1.25;
+}
+.title + .subtitle {
+  margin-top: 0.5rem;
+}
+
+/* The only uppercase/letterspaced treatment on the whole site. */
+.heading {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+  color: var(--text-muted);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+/* --- layout -------------------------------------------------------------- */
+
+.container {
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+@media (min-width: 1216px) {
+  .container {
+    max-width: 1152px;
+  }
+}
+@media (min-width: 1408px) {
+  .container {
+    max-width: 1344px;
+  }
+}
+.container.is-wide {
+  max-width: 1600px;
+}
+
+/* padding-block, not padding: `.section` and `.container` are both single-class
+   selectors and this one comes later, so setting all four sides here would
+   silently cancel the container's horizontal padding. */
+.section {
+  padding-block: 1.5rem 3rem;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gutter);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--gutter);
+}
+.row.is-tight {
+  gap: 0.375rem;
+}
+.spacer {
+  flex: 1;
+}
+
+/* --- navbar -------------------------------------------------------------- */
+
+/* metastruct.net's navbar. Their height comes from the 52px logo sitting inside
+   a navbar-item's padding, not from min-height, so the bar ends up ~66px. */
+.navbar {
+  background: var(--chrome);
+  min-height: 3.25rem;
+  display: flex;
+  align-items: stretch;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  border: none;
+}
+.navbar > .container {
+  display: flex;
+  align-items: stretch;
+  min-height: 3.25rem;
+}
+.navbar-brand {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+.navbar-brand img.logo {
+  height: 52px;
+  display: block;
+}
+.navbar-menu {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+}
+.navbar-start,
+.navbar-end {
+  display: flex;
+  align-items: stretch;
+}
+.navbar-start {
+  justify-content: flex-start;
+  margin-right: auto;
+}
+.navbar-end {
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.navbar-item,
+.navbar-link {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  color: var(--text);
+  padding: 0.5rem 0.75rem;
+  line-height: 1.5;
+  /* Hover changes colour only -- never the background. */
+  transition: color var(--t-fast);
+  cursor: pointer;
+  background: none;
+  border: none;
+  font: inherit;
+  white-space: nowrap;
+}
+.navbar-item:hover,
+.navbar-link:hover,
+.navbar-item.has-dropdown:hover .navbar-link,
+.navbar-item.is-active {
+  color: var(--accent);
+}
+.navbar-item:focus-visible,
+.navbar-link:focus-visible {
+  outline: none;
+  color: var(--accent-hi);
+  box-shadow: inset 0 -2px 0 var(--accent-hi);
+}
+.navbar .icon svg {
+  display: block;
+}
+
+/* Dropdowns open on hover, like theirs -- plus focus-within so they are
+   reachable from the keyboard, which the original is not. */
+.navbar-item.has-dropdown {
+  position: relative;
+  padding: 0;
+}
+.navbar-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 100%;
+  background: var(--chrome);
+  border: none;
+  border-radius: var(--radius-lg);
+  font-size: 0.875rem;
+  padding: 0.5rem 0;
+  box-shadow: 0 0.5em 1em -0.125em rgba(10, 10, 10, 0.4),
+    0 0 0 1px rgba(10, 10, 10, 0.1);
+  z-index: 20;
+}
+.navbar-dropdown.is-right {
+  left: auto;
+  right: 0;
+}
+.navbar-item.has-dropdown.is-hoverable:hover .navbar-dropdown,
+.navbar-item.has-dropdown.is-hoverable:focus-within .navbar-dropdown {
+  display: block;
+}
+.navbar-dropdown .navbar-item {
+  padding: 0.375rem 1.5rem;
+  width: 100%;
+}
+
+.navbar-burger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 3.25rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  margin-left: auto;
+}
+.navbar-burger span {
+  display: block;
+  height: 1px;
+  width: 16px;
+  margin: 0 auto;
+  background: var(--text);
+  transition: background var(--t-fast);
+}
+.navbar-burger:hover span {
+  background: var(--accent);
+}
+
+/* Theirs collapses to a burger at 1023px. */
+@media (max-width: 1023px) {
+  .navbar > .container {
+    display: block;
+    padding: 0 0.75rem;
+  }
+  .navbar-brand {
+    justify-content: space-between;
+  }
+  .navbar-burger {
+    display: flex;
+  }
+  .navbar-menu {
+    display: none;
+    flex-direction: column;
+    padding: 0.5rem 0;
+  }
+  .navbar-menu.is-active {
+    display: flex;
+  }
+  .navbar-start,
+  .navbar-end {
+    flex-direction: column;
+    align-items: stretch;
+    margin: 0;
+  }
+  .navbar-item.has-dropdown {
+    display: block;
+  }
+  .navbar-dropdown {
+    display: block;
+    position: static;
+    box-shadow: none;
+    padding: 0 0 0 1rem;
+  }
+}
+
+/* --- cards --------------------------------------------------------------- */
+
+.card {
+  background: var(--panel);
+  border-radius: var(--radius);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  position: relative;
+}
+.card-content {
+  padding: 1.5em;
+}
+.card-header,
+.card-footer {
+  background: var(--panel-inset);
+  padding: 0.75em 1.5em;
+}
+.card-header {
+  border-radius: var(--radius) var(--radius) 0 0;
+  font-weight: 700;
+  color: var(--text-3);
+}
+.card-footer {
+  border-top: 1px solid var(--border-soft);
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+.card.is-interactive {
+  cursor: pointer;
+  transition: background var(--t-fast);
+}
+.card.is-interactive:hover {
+  background: var(--accent-2-dk);
+}
+
+.panel {
+  background: var(--chrome);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+}
+
+/* --- buttons ------------------------------------------------------------- */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
+  background: var(--btn);
+  border: 1px solid var(--btn-border);
+  color: var(--text);
+  border-radius: var(--radius);
+  /* Height comes from the token, so a variant may change the type size without
+     changing the box. Vertical padding would fight it; the flex centring places
+     the label. */
+  height: var(--control-h);
+  padding: 0 1em;
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.5;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--t-fast), border-color var(--t-fast),
+    color var(--t-fast);
+}
+.button:hover:not(:disabled) {
+  border-color: var(--border);
+  color: var(--accent-hi);
+}
+.button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.button:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+.button.is-primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+}
+.button.is-primary:hover:not(:disabled) {
+  background: #09a67e;
+  color: #fff;
+}
+.button.is-primary:active {
+  background: #089a75;
+}
+.button.is-primary:focus-visible {
+  box-shadow: 0 0 0 0.125em var(--accent-dim);
+}
+.button.is-danger:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.button.is-small {
+  height: var(--control-h-sm);
+  font-size: 0.85rem;
+  padding: 0 0.7em;
+}
+/* Square, whatever the glyph inside is sized at. */
+.button.is-icon {
+  width: var(--control-h);
+  padding: 0;
+}
+.button.is-small.is-icon {
+  width: var(--control-h-sm);
+}
+.button.is-active {
+  background: var(--accent-2-dk);
+  border-color: transparent;
+}
+
+/* An inline-block span would carry line-height with it and push the glyph off
+   centre inside a square button. */
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* --- inputs -------------------------------------------------------------- */
+
+.input,
+.select select,
+textarea.input {
+  width: 100%;
+  background: var(--panel-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-2);
+  padding: 0 0.6em;
+  height: var(--control-h);
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.5;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+/* Pairs with `.button.is-small`, so a toolbar can be one height throughout. */
+.input.is-small,
+.select.is-small select {
+  height: var(--control-h-sm);
+  font-size: 0.85rem;
+}
+textarea.input {
+  height: auto;
+  padding: 0.5em 0.6em;
+}
+.input::placeholder {
+  color: var(--text-muted);
+}
+.input:focus,
+.select select:focus {
+  outline: none;
+  border-color: var(--accent-2-dk);
+  box-shadow: var(--ring);
+}
+.select {
+  position: relative;
+  display: block;
+}
+.select select {
+  appearance: none;
+  cursor: pointer;
+  padding-right: 2em;
+}
+.select::after {
+  content: '';
+  position: absolute;
+  right: 0.85em;
+  top: 50%;
+  width: 0.5em;
+  height: 0.5em;
+  border: 2px solid var(--accent);
+  border-top: 0;
+  border-left: 0;
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.label {
+  color: var(--text-2);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.help {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  cursor: pointer;
+  color: var(--text-2);
+}
+.checkbox input {
+  accent-color: var(--accent);
+  width: 1rem;
+  height: 1rem;
+}
+
+input[type='range'] {
+  accent-color: var(--accent);
+  width: 100%;
+}
+
+/* --- tags ---------------------------------------------------------------- */
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  background: var(--chrome);
+  color: var(--text);
+  border-radius: var(--radius);
+  height: var(--control-h-xs);
+  font-size: 0.75rem;
+  padding: 0 0.6em;
+  white-space: nowrap;
+}
+.tag.is-warning {
+  color: var(--warning);
+}
+.tag.is-danger {
+  color: var(--danger);
+}
+.tag.is-info {
+  color: var(--info);
+}
+.tag.is-accent {
+  color: var(--accent);
+}
+
+/* --- notifications ------------------------------------------------------- */
+
+.notification {
+  background: var(--border-soft);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  color: var(--text);
+}
+.notification.is-danger {
+  background: #4a1f2a;
+  color: var(--text);
+}
+.notification.is-warning {
+  background: #453b1f;
+}
+.notification a {
+  text-decoration: underline;
+}
+
+/* --- progress ------------------------------------------------------------ */
+
+/* The Nuxt page-load bar. */
+.page-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 2px;
+  background: var(--accent-hi);
+  z-index: 999999;
+  transition: width 0.1s, opacity 0.4s;
+}
+
+.bar {
+  height: 6px;
+  background: var(--panel-inset);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.bar > div {
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+  transition: width var(--t-slow);
+}
+
+/* --- misc ---------------------------------------------------------------- */
+
+.divider {
+  height: 1px;
+  background: var(--panel);
+  margin: 0.75em 0;
+}
+
+.fade-in {
+  animation: fade 0.5s ease-out;
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes loading {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+.is-loading-pulse {
+  animation: loading 1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

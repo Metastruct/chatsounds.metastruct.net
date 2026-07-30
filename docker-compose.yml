@@ -1,0 +1,29 @@
+services:
+  web:
+    build: .
+    image: make-chatsounds
+    restart: unless-stopped
+    ports:
+      # Plain HTTP only redirects to HTTPS.
+      - "${HTTP_PORT:-8080}:8080"
+      - "${HTTPS_PORT:-8443}:8443"
+    environment:
+      # Every name you intend to open this by has to be listed, because browsers
+      # match the certificate on subjectAltName and ignore the common name.
+      # e.g. CERT_HOSTS=localhost,127.0.0.1,llmbox.local,192.168.1.56
+      CERT_HOSTS: ${CERT_HOSTS:-localhost,127.0.0.1,::1}
+      # Used to build the http -> https redirect, so it has to match the port
+      # published on the host above.
+      HTTPS_PORT: ${HTTPS_PORT:-8443}
+    volumes:
+      # Keeps the certificate across restarts -- a fresh one would make every
+      # browser ask for the security exception again.
+      - certs:/etc/nginx/certs
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  certs:
