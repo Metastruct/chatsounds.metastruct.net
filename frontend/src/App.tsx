@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ExtractTab } from './components/extract/ExtractTab'
 import { Navbar, type Tab } from './components/Navbar'
-import { ReviewTab } from './components/ReviewTab'
+import { ReviewTab } from './components/review/ReviewTab'
 import { UploadTab } from './components/upload/UploadTab'
 
 export function App() {

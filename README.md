@@ -16,7 +16,11 @@ Get sounds into a chatsounds repo, entirely in the browser. Three tabs:
   the repo's preprocessor rejects uppercase paths outright. Sign in with GitHub
   and the form opens the pull request itself: fork, branch, commit, PR, all from
   the browser.
-- **Review**, a placeholder for looking over uploads before they land.
+- **Review**, for the people who look after the repo: pick an open pull
+  request, hear every sound in it, see what the checks flagged (too long, too
+  much silence, wrong format), deny sounds with comments that land on the PR,
+  approve or request changes on the whole thing, and merge. Restricted to
+  accounts with push access; everyone else is told so.
 
 Extract deliberately knows nothing about realms and Upload nothing about
 recordings: the bridge between them is a downloaded zip.
@@ -84,6 +88,34 @@ best-effort sync the fork with upstream, branch from its head, upload each
 sound as a base64 blob, build a tree and commit, then open the cross-repo pull
 request against `master`. Every step is idempotent or freshly named, so a
 failed run is safe to retry.
+
+### Reviewing
+
+The Review tab gates on the repo itself: `GET /repos/...` reports the caller's
+`permissions`, and `push` (what a merge needs) is what seeing the page needs.
+
+Opening a PR fetches its file list, then each sound's bytes from the head
+repo's blobs API (authenticated and CORS-clean, unlike raw URLs), and runs two
+kinds of checks. Format is the Upload rules again, `identifyOgg` on the header.
+The audio itself is decoded and audited (`pipeline/audit.ts`, pure and tested):
+over 30 s flags `long`, and more than 2 s of combined leading/trailing silence,
+or a sound more than a third under −45 dB RMS, flags `silence`. The checks are
+advisory; the play button outranks them.
+
+Verdicts map onto what GitHub actually supports, one review at a time:
+
+- **deny one sound** asks for a comment; the first denial submits a
+  changes-requested review naming the sound, later ones post as PR comments,
+  so the author gets one red review and a thread rather than a stack of reds.
+- **Deny all** is one changes-requested review with one comment; **Approve
+  all** is an approving review. GitHub refuses self-approval; the error is
+  shown as-is.
+- **Merge** tries a merge commit and falls back to squash if the repo
+  disallows it. The button disables itself when GitHub says the PR is not
+  mergeable.
+
+Files a PR touches outside `sound/chatsounds/autoadd/` are listed separately as
+things this page cannot check, with a pointer to review them on GitHub.
 
 ---
 
@@ -334,7 +366,7 @@ copies means two `env` objects: configuring one leaves the other on the CDN.
 cd frontend
 npm install
 npm run dev     # http://localhost:5173
-npm test        # 116 unit tests
+npm test        # 125 unit tests
 npm run build
 ```
 
@@ -344,8 +376,9 @@ derivation, so the names written to disk survive what the loader does to them),
 the segmenter's boundary and splitting logic, the envelope reader, the zip layout,
 where a hand-drawn clip is allowed to land, the ogg header parser the Upload form
 screens files with (verified against real ffmpeg output as well as crafted bytes),
-realm-name folding, that onnxruntime is told where both halves of its WebAssembly
-are, and that the backend fallback ladder always terminates.
+realm-name folding, the silence and length audit the Review tab runs, that
+onnxruntime is told where both halves of its WebAssembly are, and that the
+backend fallback ladder always terminates.
 
 ### Layout
 
@@ -363,7 +396,8 @@ frontend/src/
 ├── components/
 │   ├── extract/  start · processing · editor · waveform · clip editor
 │   ├── upload/   the realm form: combobox · drop area · sign-in and PR
-│   └──           Navbar (the three tabs) · Icon · ReviewTab
+│   ├── review/   PR picker · sound tree · verdicts and merge
+│   └──           Navbar (the three tabs) · Icon · GithubSignIn
 └── styles/       design tokens taken from metastruct.net
 ```
 

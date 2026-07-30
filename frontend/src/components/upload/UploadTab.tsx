@@ -9,6 +9,7 @@ import {
 import { fetchRealms } from '../../lib/realms'
 import { useGithub } from '../../store/useGithub'
 import { useUpload } from '../../store/useUpload'
+import { GithubAccount, GithubSignIn } from '../GithubSignIn'
 import { RealmSection } from './RealmSection'
 
 /**
@@ -98,42 +99,10 @@ export function UploadTab() {
             >
               {submitting ? 'Sending…' : 'Open the pull request'}
             </button>
-            <span className="signed-in">
-              <img src={github.user.avatarUrl} alt="" className="gh-avatar" />
-              {github.user.login}
-            </span>
-            <button type="button" className="button is-small" onClick={github.signOut}>
-              sign out
-            </button>
+            <GithubAccount />
           </>
-        ) : github.status === 'authorizing' && github.device ? (
-          <div className="device-panel">
-            <p>
-              Enter this code at{' '}
-              <a href={github.device.verificationUri} target="_blank" rel="noreferrer">
-                {github.device.verificationUri.replace('https://', '')}
-              </a>
-            </p>
-            <p className="device-code">{github.device.userCode}</p>
-            <p className="muted is-loading-pulse">waiting for you to enter it…</p>
-            <button type="button" className="button is-small" onClick={github.cancelSignIn}>
-              cancel
-            </button>
-          </div>
-        ) : github.status === 'unconfigured' ? (
-          <p className="help">
-            This copy is not connected to GitHub. Whoever hosts it can set{' '}
-            <code>GITHUB_CLIENT_ID</code> to turn sign-in on.
-          </p>
         ) : (
-          <button
-            type="button"
-            className="button is-primary"
-            disabled={github.status === 'checking'}
-            onClick={() => void github.signIn()}
-          >
-            Continue with GitHub
-          </button>
+          <GithubSignIn />
         )}
 
         <p className="help">
@@ -160,7 +129,7 @@ export function UploadTab() {
         </p>
       )}
 
-      {(error || github.error) && <p className="warning-line">{error ?? github.error}</p>}
+      {error && <p className="warning-line">{error}</p>}
     </div>
   )
 }

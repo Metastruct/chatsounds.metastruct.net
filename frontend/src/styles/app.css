@@ -186,6 +186,116 @@
   margin-top: 1rem;
 }
 
+/* --- review tab ----------------------------------------------------------- */
+
+.review-tab {
+  max-width: 58rem;
+}
+
+.pr-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 1rem;
+}
+.pr-row {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  text-align: left;
+  padding: 0.55rem 0.9rem;
+  background: var(--panel);
+  border: none;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  transition: background var(--t-fast);
+}
+.pr-row:hover {
+  background: var(--accent-2-dk);
+}
+.pr-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pr-heading {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.review-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 1.25rem 0;
+}
+.review-realm-name {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+}
+.review-file {
+  display: grid;
+  grid-template-columns: var(--control-h-sm) minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.3rem 0.4rem 0.3rem 1.25rem;
+}
+.review-file.is-denied {
+  opacity: 0.6;
+}
+.review-file.is-other {
+  grid-template-columns: var(--control-h-sm) minmax(0, 1fr) auto;
+}
+.review-file-name {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.review-file-meta {
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.review-file-tags {
+  display: flex;
+  gap: 4px;
+}
+
+/* Sits under its row, full width, so the comment has room to be a sentence. */
+.deny-box {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 0.5rem;
+  padding-left: 1.25rem;
+  margin-top: 0.25rem;
+}
+.deny-box .input {
+  max-width: 28rem;
+}
+
+.review-foot {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.review-trail {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 /* --- processing ---------------------------------------------------------- */
 
 .processing {

@@ -12,6 +12,28 @@ export function formatDuration(seconds: number): string {
   return `${minutes}m ${Math.round(seconds - minutes * 60)}s`
 }
 
+/** "3 days ago", for things like pull request ages. */
+export function timeAgo(iso: string): string {
+  const seconds = Math.max(0, (Date.now() - Date.parse(iso)) / 1000)
+  const steps: [number, string][] = [
+    [60, 'minute'],
+    [60, 'hour'],
+    [24, 'day'],
+    [30, 'month'],
+    [12, 'year'],
+  ]
+  let value = seconds / 60
+  let unit = 'minute'
+  for (const [span, next] of steps.slice(1)) {
+    if (value < span) break
+    value /= span
+    unit = next
+  }
+  const count = Math.floor(value)
+  if (count < 1) return 'just now'
+  return `${count} ${unit}${count === 1 ? '' : 's'} ago`
+}
+
 export const FLAG_LABELS: Record<string, { label: string; tone: string; hint: string }> = {
   no_speech: {
     label: 'no words',

@@ -157,11 +157,17 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 // ---------------------------------------------------------------------------
 // REST
 
+/**
+ * One authenticated REST call. `allow` lists non-2xx statuses the caller wants
+ * to inspect rather than have thrown, e.g. the 409 a fork sync answers when
+ * histories diverged, or the 405 a merge answers when a method is disallowed.
+ */
 async function api<T>(
   token: string,
   method: string,
   path: string,
   body?: unknown,
+  allow: number[] = [409],
 ): Promise<{ status: number; data: T }> {
   const response = await fetch(`${API}${path}`, {
     method,
@@ -178,7 +184,7 @@ async function api<T>(
   } catch {
     // 204s and friends have no body.
   }
-  if (!response.ok && response.status !== 409) {
+  if (!response.ok && !allow.includes(response.status)) {
     const message = (data as { message?: string })?.message
     throw new Error(message ? `GitHub: ${message}` : `GitHub answered ${response.status}.`)
   }
@@ -353,6 +359,178 @@ export async function openPullRequest(
 
   say('done', 1)
   return { url: pr.html_url, number: pr.number }
+}
+
+// ---------------------------------------------------------------------------
+// Reviewing
+
+/**
+ * Whether this user can review and merge in the upstream repo.
+ *
+ * `GET /repos/...` includes a `permissions` object for whoever asks; `push` is
+ * the right a merge needs. No `permissions` at all means the token could not
+ * see the repo that way, which for this purpose is the same as no.
+ */
+export async function canPush(token: string): Promise<boolean> {
+  const { data } = await api<{ permissions?: { push?: boolean } }>(
+    token,
+    'GET',
+    `/repos/${UPSTREAM.owner}/${UPSTREAM.repo}`,
+  )
+  return data.permissions?.push === true
+}
+
+export interface PrSummary {
+  number: number
+  title: string
+  author: string
+  createdAt: string
+}
+
+export async function listOpenPrs(token: string): Promise<PrSummary[]> {
+  const { data } = await api<
+    { number: number; title: string; user: { login: string }; created_at: string }[]
+  >(token, 'GET', `/repos/${UPSTREAM.owner}/${UPSTREAM.repo}/pulls?state=open&per_page=100`)
+  return data.map((pr) => ({
+    number: pr.number,
+    title: pr.title,
+    author: pr.user.login,
+    createdAt: pr.created_at,
+  }))
+}
+
+export interface PrDetail {
+  number: number
+  title: string
+  author: string
+  headOwner: string
+  headRepo: string
+  /** null while GitHub is still computing it. */
+  mergeable: boolean | null
+  mergeableState: string
+  merged: boolean
+}
+
+export async function getPrDetail(token: string, number: number): Promise<PrDetail> {
+  const { data } = await api<{
+    number: number
+    title: string
+    user: { login: string }
+    head: { repo: { name: string; owner: { login: string } } | null }
+    mergeable: boolean | null
+    mergeable_state: string
+    merged: boolean
+  }>(token, 'GET', `/repos/${UPSTREAM.owner}/${UPSTREAM.repo}/pulls/${number}`)
+  return {
+    number: data.number,
+    title: data.title,
+    author: data.user.login,
+    // A deleted fork leaves head.repo null; the files are then unreachable.
+    headOwner: data.head.repo?.owner.login ?? '',
+    headRepo: data.head.repo?.name ?? '',
+    mergeable: data.mergeable,
+    mergeableState: data.mergeable_state,
+    merged: data.merged,
+  }
+}
+
+export interface PrChangedFile {
+  path: string
+  status: string
+  sha: string
+}
+
+export async function listPrFiles(token: string, number: number): Promise<PrChangedFile[]> {
+  const files: PrChangedFile[] = []
+  for (let page = 1; ; page += 1) {
+    const { data } = await api<{ filename: string; status: string; sha: string }[]>(
+      token,
+      'GET',
+      `/repos/${UPSTREAM.owner}/${UPSTREAM.repo}/pulls/${number}/files?per_page=100&page=${page}`,
+    )
+    files.push(...data.map((f) => ({ path: f.filename, status: f.status, sha: f.sha })))
+    if (data.length < 100) return files
+  }
+}
+
+/**
+ * A changed file's bytes, via the head repo's blob.
+ *
+ * The blobs API rather than the raw URL because it is authenticated (5000
+ * calls an hour instead of 60) and served from api.github.com, which sends the
+ * CORS headers this cross-origin-isolated page needs.
+ */
+export async function fetchBlobBytes(
+  token: string,
+  owner: string,
+  repo: string,
+  sha: string,
+): Promise<Uint8Array> {
+  const { data } = await api<{ content: string; encoding: string }>(
+    token,
+    'GET',
+    `/repos/${owner}/${repo}/git/blobs/${sha}`,
+  )
+  if (data.encoding !== 'base64') throw new Error(`GitHub sent a ${data.encoding} blob.`)
+  // The content arrives base64 with newlines every 60 characters.
+  const binary = atob(data.content.replace(/\n/g, ''))
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
+  return bytes
+}
+
+export interface ReviewEntry {
+  reviewer: string
+  state: string
+  body: string
+  submittedAt: string
+}
+
+/** Every submitted review, oldest first, as GitHub returns them. */
+export async function listReviews(token: string, number: number): Promise<ReviewEntry[]> {
+  const { data } = await api<
+    { user: { login: string }; state: string; body: string; submitted_at: string }[]
+  >(token, 'GET', `/repos/${UPSTREAM.owner}/${UPSTREAM.repo}/pulls/${number}/reviews?per_page=100`)
+  return data
+    .filter((review) => review.state !== 'PENDING')
+    .map((review) => ({
+      reviewer: review.user.login,
+      state: review.state,
+      body: review.body ?? '',
+      submittedAt: review.submitted_at,
+    }))
+}
+
+export async function submitReview(
+  token: string,
+  number: number,
+  event: 'APPROVE' | 'REQUEST_CHANGES',
+  body: string,
+): Promise<void> {
+  await api(token, 'POST', `/repos/${UPSTREAM.owner}/${UPSTREAM.repo}/pulls/${number}/reviews`, {
+    event,
+    body,
+  })
+}
+
+/** A plain comment on the PR's conversation. */
+export async function postPrComment(token: string, number: number, body: string): Promise<void> {
+  await api(token, 'POST', `/repos/${UPSTREAM.owner}/${UPSTREAM.repo}/issues/${number}/comments`, {
+    body,
+  })
+}
+
+export async function mergePr(token: string, number: number): Promise<void> {
+  const path = `/repos/${UPSTREAM.owner}/${UPSTREAM.repo}/pulls/${number}/merge`
+  // The repo decides which methods it allows; a plain merge refused with a 405
+  // is retried as a squash rather than surfaced.
+  const first = await api<{ message?: string }>(token, 'PUT', path, { merge_method: 'merge' }, [405, 409])
+  if (first.status < 300) return
+  if (first.status === 405) {
+    await api(token, 'PUT', path, { merge_method: 'squash' })
+    return
+  }
+  throw new Error(first.data.message ? `GitHub: ${first.data.message}` : 'The merge was refused.')
 }
 
 async function asBase64(file: File): Promise<string> {
