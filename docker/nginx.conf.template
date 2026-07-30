@@ -67,6 +67,20 @@ server {
     # Docker's resolver, and a variable target so nginx re-resolves github.com
     # instead of pinning whatever IP it saw at startup.
     resolver 127.0.0.11 ipv6=off valid=60s;
+
+    # github.com answers these with about 4.5 KB of headers, 3.6 KB of it a
+    # content-security-policy meant for its own pages. nginx's default 4 KB
+    # proxy_buffer_size cannot hold that, and refuses the response with "upstream
+    # sent too big header", which reaches the browser as a 502. The bodies are a
+    # few hundred bytes of JSON; it is only the headers that are fat.
+    proxy_buffer_size 16k;
+    proxy_buffers 8 16k;
+    proxy_busy_buffers_size 32k;
+    # None of github's own response headers mean anything on this origin, and its
+    # session cookie would be dead weight in the browser's jar under our name.
+    proxy_hide_header Content-Security-Policy;
+    proxy_hide_header Set-Cookie;
+
     location = /github/device/code {
         set $github "https://github.com";
         proxy_pass $github/login/device/code;
