@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { describeAudit } from '../../pipeline/audit'
+import { PATH_FLAG_LABEL, PATH_FLAG_SEVERITY, describePathFlag } from '../../pipeline/pathcheck'
 import { formatDuration } from '../../lib/format'
+import { REALM_ROOT } from '../../lib/github'
 import type { ReviewSound } from '../../store/useReview'
 import { useReview } from '../../store/useReview'
 import { Icon } from '../Icon'
@@ -67,7 +69,7 @@ export function PrTree({ token, myLogin }: Props) {
     <div className="review-tree">
       {realms.map((realm) => (
         <div key={realm} className="review-realm">
-          <p className="review-realm-name">▸ {realm}/</p>
+          <p className="review-realm-name">▸ {realm ? `${realm}/` : '(no realm)'}</p>
           {sounds
             .filter((sound) => sound.realm === realm)
             .map((sound) => (
@@ -91,7 +93,9 @@ export function PrTree({ token, myLogin }: Props) {
               <span />
               <span className="review-file-name">{file.path}</span>
               <span className="muted">
-                {file.status}, this page cannot check it, look at it on GitHub
+                {file.status !== 'removed' && file.path.startsWith(`${REALM_ROOT}/`)
+                  ? `${file.status}, the game only loads .ogg files and will ignore this one`
+                  : `${file.status}, this page cannot check it, look at it on GitHub`}
               </span>
             </div>
           ))}
@@ -158,6 +162,15 @@ function SoundRow({
       </span>
 
       <span className="review-file-tags">
+        {sound.pathCheck?.flags.map((flag) => (
+          <span
+            key={flag}
+            className={`tag is-${PATH_FLAG_SEVERITY[flag]}`}
+            title={describePathFlag(sound.pathCheck!, flag)}
+          >
+            {PATH_FLAG_LABEL[flag]}
+          </span>
+        ))}
         {sound.formatProblem && (
           <span className="tag is-danger" title={sound.formatProblem}>
             bad file

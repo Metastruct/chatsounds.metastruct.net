@@ -40,6 +40,7 @@ import {
 import { type Audit, auditEnvelope } from '../pipeline/audit'
 import { computeEnvelope } from '../pipeline/envelope'
 import { type OggInfo, OGG_PROBE_BYTES, describeOggProblem, identifyOgg } from '../pipeline/ogg'
+import { type PathCheck, checkPath, unpaddedVariations } from '../pipeline/pathcheck'
 
 export interface ReviewSound {
   path: string
@@ -55,6 +56,8 @@ export interface ReviewSound {
   audit?: Audit
   buffer?: AudioBuffer
   denied?: boolean
+  /** What the path itself means to the game, known before any bytes arrive. */
+  pathCheck?: PathCheck
 }
 
 export interface OtherFile {
@@ -278,10 +281,17 @@ export const useReview = create<ReviewState>((set, get) => ({
             name: slash > 0 ? relative.slice(slash + 1) : relative,
             sha: file.sha,
             state: 'pending',
+            pathCheck: checkPath(file.path),
           })
         } else {
           others.push({ path: file.path, status: file.status })
         }
+      }
+
+      // Ordering trouble only shows against the siblings, so it comes after.
+      const unpadded = unpaddedVariations(sounds.map((sound) => sound.path))
+      for (const sound of sounds) {
+        if (unpadded.has(sound.path)) sound.pathCheck?.flags.push('unpadded')
       }
 
       // Attribution needs the sounds, so the comments come after them rather
