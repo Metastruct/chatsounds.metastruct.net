@@ -5,6 +5,8 @@ import {
   type PathFlag,
   checkPath,
   describePathFlag,
+  describeSparseRealm,
+  sparseNewRealms,
   unpaddedVariations,
 } from './pathcheck'
 
@@ -115,6 +117,39 @@ describe('unpaddedVariations', () => {
   it('ignores non-numeric siblings and other folders', () => {
     const paths = [at('r/k/1.ogg'), at('r/k/take two.ogg'), at('r/other/10.ogg')]
     expect(unpaddedVariations(paths).size).toBe(0)
+  })
+})
+
+describe('sparseNewRealms', () => {
+  const existing = ['portal', 'valorant']
+
+  it('flags a new realm holding one or two triggers', () => {
+    const checks = [checkPath(at('brand_new/hello.ogg')), checkPath(at('brand_new/bye.ogg'))]
+    expect(sparseNewRealms(checks, existing)).toEqual(new Map([['brand_new', 2]]))
+  })
+
+  it('counts triggers, not files', () => {
+    // Five variations of one sound are still one sound.
+    const checks = [1, 2, 3, 4, 5].map((n) => checkPath(at(`brand_new/laugh/0${n}.ogg`)))
+    expect(sparseNewRealms(checks, existing)).toEqual(new Map([['brand_new', 1]]))
+  })
+
+  it('accepts a new realm arriving with a decent batch', () => {
+    const checks = ['a', 'b', 'c'].map((k) => checkPath(at(`brand_new/${k}.ogg`)))
+    expect(sparseNewRealms(checks, existing).size).toBe(0)
+  })
+
+  it('ignores realms that already exist', () => {
+    expect(sparseNewRealms([checkPath(at('portal/one more.ogg'))], existing).size).toBe(0)
+  })
+
+  it('stays quiet when the existing list is unknown', () => {
+    expect(sparseNewRealms([checkPath(at('brand_new/hello.ogg'))], []).size).toBe(0)
+  })
+
+  it('describes the count in words', () => {
+    expect(describeSparseRealm('brand_new', 1)).toContain('one sound')
+    expect(describeSparseRealm('brand_new', 2)).toContain('2 sounds')
   })
 })
 

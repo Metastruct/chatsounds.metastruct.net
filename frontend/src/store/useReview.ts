@@ -40,7 +40,8 @@ import {
 import { type Audit, auditEnvelope } from '../pipeline/audit'
 import { computeEnvelope } from '../pipeline/envelope'
 import { type OggInfo, OGG_PROBE_BYTES, describeOggProblem, identifyOgg } from '../pipeline/ogg'
-import { type PathCheck, checkPath, unpaddedVariations } from '../pipeline/pathcheck'
+import { type PathCheck, checkPath, sparseNewRealms, unpaddedVariations } from '../pipeline/pathcheck'
+import { fetchRealms } from '../lib/realms'
 
 export interface ReviewSound {
   path: string
@@ -81,6 +82,8 @@ interface ReviewState {
   detail: PrDetail | null
   sounds: ReviewSound[]
   others: OtherFile[]
+  /** New realms this PR creates with too few sounds, realm to trigger count. */
+  sparseRealms: Record<string, number>
   reviews: ReviewEntry[]
   comments: FileComment[]
   /** Said about the pull request rather than about any one sound. */
@@ -184,6 +187,7 @@ export const useReview = create<ReviewState>((set, get) => ({
   detail: null,
   sounds: [],
   others: [],
+  sparseRealms: {},
   reviews: [],
   comments: [],
   messages: [],
@@ -206,6 +210,7 @@ export const useReview = create<ReviewState>((set, get) => ({
       detail: null,
       sounds: [],
       others: [],
+      sparseRealms: {},
       reviews: [],
       comments: [],
       messages: [],
@@ -251,6 +256,7 @@ export const useReview = create<ReviewState>((set, get) => ({
       detail: null,
       sounds: [],
       others: [],
+      sparseRealms: {},
       reviews: [],
       comments: [],
       messages: [],
@@ -310,6 +316,14 @@ export const useReview = create<ReviewState>((set, get) => ({
         set((state) => (state.detail?.number === number ? said : {}))
       })
 
+      // Realm list comes from cache or one unauthenticated call; a new realm
+      // holding only a sound or two usually gets denied, so say so up front.
+      void fetchRealms().then((existing) => {
+        if (get().detail?.number !== number) return
+        const checks = sounds.flatMap((sound) => sound.pathCheck ?? [])
+        set({ sparseRealms: Object.fromEntries(sparseNewRealms(checks, existing)) })
+      })
+
       if (!detail.headOwner) {
         set({ loading: null, error: 'The fork this came from is gone, so the sounds cannot be fetched.' })
         return
@@ -335,6 +349,7 @@ export const useReview = create<ReviewState>((set, get) => ({
       detail: null,
       sounds: [],
       others: [],
+      sparseRealms: {},
       reviews: [],
       comments: [],
       messages: [],

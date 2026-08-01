@@ -139,6 +139,37 @@ export function unpaddedVariations(paths: string[]): Set<string> {
   return flagged
 }
 
+/**
+ * New realms that arrive with only a sound or two, which reviewers usually
+ * deny: a realm is a category, not a home for one clip. Returns realm to
+ * distinct trigger count. An empty existing list means the repo could not be
+ * listed, so nothing is flagged rather than everything.
+ */
+export function sparseNewRealms(checks: PathCheck[], existing: string[]): Map<string, number> {
+  if (existing.length === 0) return new Map()
+  const known = new Set(existing.map((name) => name.toLowerCase()))
+
+  const keysByRealm = new Map<string, Set<string>>()
+  for (const check of checks) {
+    if (!check.realm || known.has(check.realm)) continue
+    const keys = keysByRealm.get(check.realm) ?? new Set()
+    if (check.key) keys.add(check.key)
+    keysByRealm.set(check.realm, keys)
+  }
+
+  const sparse = new Map<string, number>()
+  for (const [realm, keys] of keysByRealm) {
+    if (keys.size <= 2) sparse.set(realm, keys.size)
+  }
+  return sparse
+}
+
+/** Tooltip for the realm-level tag; the count is distinct triggers, not files. */
+export function describeSparseRealm(realm: string, count: number): string {
+  const amount = count === 1 ? 'one sound' : `${count} sounds`
+  return `"${realm}" is a new realm and this only puts ${amount} in it, which usually gets denied; the sounds likely belong in an existing realm`
+}
+
 /** One sentence a reviewer can act on, shown as the tag tooltip. */
 export function describePathFlag(check: PathCheck, flag: PathFlag): string {
   switch (flag) {

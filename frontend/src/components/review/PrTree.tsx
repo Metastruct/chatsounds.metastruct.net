@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { describeAudit } from '../../pipeline/audit'
-import { PATH_FLAG_LABEL, PATH_FLAG_SEVERITY, describePathFlag } from '../../pipeline/pathcheck'
+import {
+  PATH_FLAG_LABEL,
+  PATH_FLAG_SEVERITY,
+  describePathFlag,
+  describeSparseRealm,
+} from '../../pipeline/pathcheck'
 import { formatDuration } from '../../lib/format'
 import { REALM_ROOT } from '../../lib/github'
 import type { ReviewSound } from '../../store/useReview'
@@ -26,6 +31,7 @@ let sharedContext: AudioContext | null = null
 export function PrTree({ token, myLogin }: Props) {
   const sounds = useReview((state) => state.sounds)
   const others = useReview((state) => state.others)
+  const sparseRealms = useReview((state) => state.sparseRealms)
 
   const [playing, setPlaying] = useState<string | null>(null)
   const sourceRef = useRef<AudioBufferSourceNode | null>(null)
@@ -69,7 +75,17 @@ export function PrTree({ token, myLogin }: Props) {
     <div className="review-tree">
       {realms.map((realm) => (
         <div key={realm} className="review-realm">
-          <p className="review-realm-name">▸ {realm ? `${realm}/` : '(no realm)'}</p>
+          <p className="review-realm-name">
+            ▸ {realm ? `${realm}/` : '(no realm)'}
+            {sparseRealms[realm] !== undefined && (
+              <span
+                className="tag is-warning"
+                title={describeSparseRealm(realm, sparseRealms[realm])}
+              >
+                new realm
+              </span>
+            )}
+          </p>
           {sounds
             .filter((sound) => sound.realm === realm)
             .map((sound) => (

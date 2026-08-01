@@ -260,6 +260,9 @@
   color: var(--text-muted);
   margin-bottom: 0.35rem;
 }
+.review-realm-name .tag {
+  margin-left: 0.5em;
+}
 .review-file {
   display: grid;
   grid-template-columns: var(--control-h-sm) minmax(0, 1fr) auto auto auto;
