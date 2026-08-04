@@ -146,6 +146,12 @@ server {
     }
 
     location ~ "^/s/(?<s_realm>[a-z0-9 ._!()+\x80-\xff-]+)/(?<s_name>[a-z0-9 ._!()+/\x80-\xff-]+)\.ogg$" {
+        # An empty type table, which is not decoration: the URI ends in .ogg,
+        # nginx maps that extension through mime.types to audio/ogg, and that
+        # beats default_type, which only speaks when no extension matched. The
+        # page then went out as HTML labelled audio, so browsers rendered a
+        # broken media player and Discord saw a sound file with no tags to read.
+        types { }
         default_type text/html;
         charset utf-8;
         set $public "$scheme://$http_host";
