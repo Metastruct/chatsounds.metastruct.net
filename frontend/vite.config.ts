@@ -25,7 +25,7 @@ function shareRoutes(): Plugin {
     name: 'chatsounds-share-routes',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        const match = /^\/(s|stream)\/([^?#]+)/.exec(req.url ?? '')
+        const match = /^\/(s|stream|mp4)\/([^?#]+)/.exec(req.url ?? '')
         if (!match) return next()
 
         const [, route, encoded] = match
@@ -35,13 +35,25 @@ function shareRoutes(): Plugin {
         } catch {
           return next()
         }
+        // The mp4 route names a sound by its .mp4 rendering; what has to be a
+        // legal sound path is the .ogg behind it.
+        const asSound = route === 'mp4' ? decoded.replace(/\.mp4$/, '.ogg') : decoded
         // nginx resolves .. away before a location ever sees the URI; node
         // hands it over untouched, so it is rejected by hand here.
-        if (!SOUND_PATH.test(decoded) || decoded.includes('..')) return next()
+        if (!SOUND_PATH.test(asSound) || decoded.includes('..')) return next()
 
         if (route === 'stream') {
           void streamSound(encoded, res).catch(() => {
             res.statusCode = 502
+            res.end()
+          })
+          return
+        }
+
+        if (route === 'mp4') {
+          void buildMp4(encoded, decoded, res).catch((error: Error) => {
+            server.config.logger.warn(`/mp4/: ${error.message}`)
+            res.statusCode = 503
             res.end()
           })
           return
@@ -59,7 +71,7 @@ function shareRoutes(): Plugin {
         // production does not send them here either.
         res.removeHeader('Cross-Origin-Opener-Policy')
         res.removeHeader('Cross-Origin-Embedder-Policy')
-        res.end(sharePage({ realm, name, encoded, origin }))
+        res.end(sharePage({ realm, name, encoded, mp4: encoded.replace(/\.ogg$/, '.mp4'), origin }))
       })
     },
   }
@@ -81,7 +93,73 @@ async function streamSound(encoded: string, res: import('node:http').ServerRespo
   res.end(Buffer.from(await upstream.arrayBuffer()))
 }
 
-function sharePage(s: { realm: string; name: string; encoded: string; origin: string }): string {
+/**
+ * The dev-time stand-in for mp4d (docker/mp4d.mjs), which nginx runs in
+ * production. Same ffmpeg invocation, so what embeds here embeds there; it
+ * just keeps its handful of files under node_modules/.cache and needs ffmpeg
+ * on PATH, warning rather than failing when there is none.
+ */
+async function buildMp4(encoded: string, decoded: string, res: import('node:http').ServerResponse) {
+  const { mkdir, readFile, writeFile } = await import('node:fs/promises')
+  const { spawn } = await import('node:child_process')
+  const { dirname, resolve } = await import('node:path')
+
+  const cache = resolve('node_modules/.cache/chatsounds-mp4', decoded)
+  let bytes: Buffer | null = null
+  try {
+    bytes = await readFile(cache)
+  } catch {
+    const soundUrl = `${UPSTREAM_RAW}/${encoded.replace(/\.mp4$/, '.ogg')}`
+    const upstream = await fetch(soundUrl)
+    if (!upstream.ok) {
+      res.statusCode = upstream.status
+      return res.end()
+    }
+    await mkdir(dirname(cache), { recursive: true })
+    const oggPath = `${cache}.ogg`
+    await writeFile(oggPath, Buffer.from(await upstream.arrayBuffer()))
+    await new Promise<void>((ok, fail) => {
+      const child = spawn(
+        'ffmpeg',
+        // Kept in step with docker/mp4d.mjs, plus the squaring the image build
+        // does there ahead of time.
+        // biome-ignore format: reads as one command line
+        [
+          '-hide_banner', '-loglevel', 'error', '-y',
+          '-loop', '1', '-framerate', '2', '-i', resolve('../docker/share-cover.png'),
+          '-i', oggPath,
+          '-vf', "crop='min(iw,ih)':'min(iw,ih)',scale=480:480:flags=neighbor",
+          '-c:v', 'libx264', '-tune', 'stillimage', '-preset', 'veryfast', '-crf', '30',
+          '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k',
+          '-shortest', '-movflags', '+faststart', cache,
+        ],
+        { stdio: ['ignore', 'ignore', 'pipe'] },
+      )
+      let stderr = ''
+      child.stderr.on('data', (chunk) => {
+        stderr += chunk
+      })
+      child.on('error', () => fail(new Error('ffmpeg is not on PATH, so /mp4/ cannot answer here')))
+      child.on('close', (code) => (code === 0 ? ok() : fail(new Error(stderr.trim()))))
+    })
+    bytes = await readFile(cache)
+  }
+
+  res.statusCode = 200
+  res.setHeader('Content-Type', 'video/mp4')
+  res.setHeader('Content-Length', bytes.length)
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
+  res.end(bytes)
+}
+
+function sharePage(s: {
+  realm: string
+  name: string
+  encoded: string
+  mp4: string
+  origin: string
+}): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -99,6 +177,16 @@ function sharePage(s: { realm: string; name: string; encoded: string; origin: st
 <meta property="og:audio" content="${s.origin}/stream/${s.encoded}">
 <meta property="og:audio:secure_url" content="${s.origin}/stream/${s.encoded}">
 <meta property="og:audio:type" content="audio/ogg">
+<meta property="og:video" content="${s.origin}/mp4/${s.mp4}">
+<meta property="og:video:secure_url" content="${s.origin}/mp4/${s.mp4}">
+<meta property="og:video:type" content="video/mp4">
+<meta property="og:video:width" content="480">
+<meta property="og:video:height" content="480">
+<meta property="twitter:card" content="player">
+<meta property="twitter:player:stream" content="${s.origin}/mp4/${s.mp4}">
+<meta property="twitter:player:stream:content_type" content="video/mp4">
+<meta property="twitter:player:width" content="480">
+<meta property="twitter:player:height" content="480">
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <style>
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:#212121;color:#fefefe;font-family:system-ui,-apple-system,sans-serif}

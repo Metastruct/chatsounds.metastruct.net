@@ -22,7 +22,7 @@ Get sounds into a chatsounds repo, entirely in the browser. Four tabs:
   approve or request changes on the whole thing, and merge. Restricted to
   accounts with push access; everyone else is told so.
 - **Explore**, the reference: every sound in the repo as one tree, realm by
-  trigger by variation, with a play button on each of the rows It opens
+  trigger by variation, with a play button on every row. It opens
   on the realm names alone, since that is a list a person can read; a realm
   unfolds when clicked, and searching unfolds whatever matches, name or trigger.
   Answers the question that comes before adding a sound, which is whether it is
@@ -31,16 +31,6 @@ Get sounds into a chatsounds repo, entirely in the browser. Four tabs:
 
 Extract deliberately knows nothing about realms and Upload nothing about
 recordings: the bridge between them is a downloaded zip.
-
-**The server holds nothing.** Decoding, voice detection, transcription, Ogg
-Vorbis encoding, file validation and the whole pull-request flow happen in the
-tab; sounds go from the user's disk to the user's own fork, never through this
-host. The server is an nginx container serving static files, with no database,
-no uploads directory, no per-user state and no secrets, so it costs the same to
-host for one person as for a hundred. Outbound traffic: the speech model from
-the Hugging Face CDN, the GitHub API (realm list unauthenticated and cached an
-hour, everything else with the user's own token), and two OAuth calls forwarded
-through this origin because github.com sends no CORS headers on them.
 
 Built for [neo-chatsounds](https://github.com/Earu/neo-chatsounds) and
 [garrysmod-chatsounds](https://github.com/Metastruct/garrysmod-chatsounds).
@@ -89,18 +79,30 @@ the same, with `VITE_GITHUB_CLIENT_ID` in `.env.local` supplying the id. The
 forwarder holds no secret and no state. Tokens are scoped to `public_repo` and
 live in the browser's localStorage until sign-out.
 
-**Sharing one sound.** The server answers two routes besides the app itself.
-`/stream/<realm>/<trigger>.ogg` proxies the file from raw.githubusercontent.com
-with `content-disposition: attachment` stripped, which is the header that makes
-a link to GitHub download a sound instead of playing it. `/s/<realm>/<trigger>.ogg`
-returns a small page carrying that one sound's Open Graph tags and an audio
-player, because a chat client's crawler reads tags out of HTML and never runs
-the app's JavaScript. Both live in `docker/nginx.conf.template`, and both are
-mirrored in `vite.config.ts` for development. The path is reflected into that
-page's markup and nginx cannot escape anything, so the safety is the location's
-character class: every path in the repo is lowercase letters, digits, space and
-`. _ - ! ( ) +`, and a request carrying anything else matches no location and
-falls through to the app.
+**Sharing one sound.** The server answers three routes besides the app itself.
+
+- `/s/<realm>/<trigger>.ogg` is the link the copy button yields: a small page
+  carrying that one sound's Open Graph tags and a player, because a chat
+  client's crawler reads tags out of HTML and never runs the app's JavaScript.
+  It must not be served as `audio/ogg` just because its URL ends in `.ogg`,
+  which is why its location empties nginx's type table.
+- `/stream/<realm>/<trigger>.ogg` proxies the file from raw.githubusercontent.com
+  with `content-disposition: attachment` stripped, the header that makes a link
+  to GitHub download a sound instead of playing it.
+- `/mp4/<realm>/<trigger>.mp4` is the same sound as an MP4, the audio re-encoded
+  to AAC under a still frame of the logo. Discord has never supported the
+  OpenGraph audio tags and reserves its player embeds for a few whitelisted
+  music services, so an MP4 behind `og:video` is the only way a link from
+  anybody's domain plays inline. `mp4d` (`docker/mp4d.mjs`) builds one the first
+  time it is asked for and nginx serves it off a volume every time after, so
+  only sounds somebody actually shares are ever encoded.
+
+All three live in `docker/nginx.conf.template` and are mirrored in
+`vite.config.ts` for development. The path is reflected into the share page's
+markup and used as a filename, and nginx cannot escape anything, so the safety
+is the location's character class: every path in the repo is lowercase letters,
+digits, space and `. _ - ! ( ) +`, and a request carrying anything else matches
+no location and falls through to the app.
 
 **How the PR is made.** Everything runs in the tab against the REST API: ensure
 a fork exists (creating one is idempotent and asynchronous, so it is polled),

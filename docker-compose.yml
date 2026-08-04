@@ -23,6 +23,9 @@ services:
       # Keeps the certificate across restarts -- a fresh one would make every
       # browser ask for the security exception again.
       - certs:/etc/nginx/certs
+      # The MP4s built for shared sounds. Losing these costs a refetch and a
+      # re-encode of each one, nothing more, but there is no reason to.
+      - mp4cache:/var/cache/chatsounds-mp4
     tmpfs:
       - /var/cache/nginx
       - /var/run
@@ -31,3 +34,4 @@ services:
 
 volumes:
   certs:
+  mp4cache:

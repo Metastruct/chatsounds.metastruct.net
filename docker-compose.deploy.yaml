@@ -34,8 +34,15 @@ services:
       - traefik.http.routers.chatsounds.tls.certResolver=letsencryptmeta
       - traefik.http.routers.chatsounds.entrypoints=websecure
       - traefik.http.routers.chatsounds.middlewares=default_ssl
+    volumes:
+      # The MP4s built for shared sounds, kept across the restarts Watchtower
+      # performs on every push to main.
+      - mp4cache:/var/cache/chatsounds-mp4
     networks:
       - traefik
+
+volumes:
+  mp4cache:
 
 networks:
   traefik:

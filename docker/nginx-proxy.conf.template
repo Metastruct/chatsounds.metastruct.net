@@ -19,6 +19,13 @@ map $request_uri $chatsound_path {
     "~^/(?:s|stream)/(?<encoded>[^?#]+)"  $encoded;
 }
 
+# The same path pointed at the MP4 the share page embeds, since nginx cannot do
+# string surgery anywhere else.
+map $request_uri $chatsound_mp4 {
+    default "";
+    "~^/s/(?<stem>[^?#]+)\\.ogg$"  "$stem.mp4";
+}
+
 server {
     listen 8080;
     server_name _;
@@ -125,6 +132,26 @@ server {
         add_header Cache-Control "public, max-age=86400" always;
     }
 
+
+    # Built by mp4d on the first request for a sound and kept on the volume, so
+    # nginx answers every later one straight off the disk. try_files is what
+    # makes that split: a hit never reaches node, and a hit is the common case.
+    location ~ "^/mp4/[a-z0-9 ._!()+/\\x80-\\xff-]+\\.mp4$" {
+        root /var/cache/chatsounds-mp4;
+        try_files $uri @mp4d;
+        add_header Cross-Origin-Resource-Policy cross-origin always;
+        add_header Access-Control-Allow-Origin "*" always;
+        add_header Cache-Control "public, max-age=86400" always;
+    }
+    location @mp4d {
+        proxy_pass http://127.0.0.1:8081;
+        # An encode of a long sound takes a moment, and the crawler waiting on
+        # it is better served late than with a 504.
+        proxy_read_timeout 120s;
+        add_header Cross-Origin-Resource-Policy cross-origin always;
+        add_header Access-Control-Allow-Origin "*" always;
+    }
+
     location ~ "^/s/(?<s_realm>[a-z0-9 ._!()+\x80-\xff-]+)/(?<s_name>[a-z0-9 ._!()+/\x80-\xff-]+)\.ogg$" {
         # An empty type table, which is not decoration: the URI ends in .ogg,
         # nginx maps that extension through mime.types to audio/ogg, and that
@@ -158,6 +185,16 @@ server {
 <meta property="og:audio" content="$public/stream/$chatsound_path">
 <meta property="og:audio:secure_url" content="$public/stream/$chatsound_path">
 <meta property="og:audio:type" content="audio/ogg">
+<meta property="og:video" content="$public/mp4/$chatsound_mp4">
+<meta property="og:video:secure_url" content="$public/mp4/$chatsound_mp4">
+<meta property="og:video:type" content="video/mp4">
+<meta property="og:video:width" content="480">
+<meta property="og:video:height" content="480">
+<meta property="twitter:card" content="player">
+<meta property="twitter:player:stream" content="$public/mp4/$chatsound_mp4">
+<meta property="twitter:player:stream:content_type" content="video/mp4">
+<meta property="twitter:player:width" content="480">
+<meta property="twitter:player:height" content="480">
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <style>
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:#212121;color:#fefefe;font-family:system-ui,-apple-system,sans-serif}
