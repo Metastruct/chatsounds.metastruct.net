@@ -1,6 +1,6 @@
 # chatsounds.metastruct.net
 
-Get sounds into a chatsounds repo, entirely in the browser. Three tabs:
+Get sounds into a chatsounds repo, entirely in the browser. Four tabs:
 
 - **Extract**, the helper: cut one long recording into named clips. It finds
   where each voice line starts and ends, transcribes it, names the clip after
@@ -21,6 +21,13 @@ Get sounds into a chatsounds repo, entirely in the browser. Three tabs:
   much silence, wrong format), deny sounds with comments that land on the PR,
   approve or request changes on the whole thing, and merge. Restricted to
   accounts with push access; everyone else is told so.
+- **Explore**, the reference: every sound in the repo as one tree, realm by
+  trigger by variation, with a play button on each of the rows It opens
+  on the realm names alone, since that is a list a person can read; a realm
+  unfolds when clicked, and searching unfolds whatever matches, name or trigger.
+  Answers the question that comes before adding a sound, which is whether it is
+  already there. Needs no sign-in. The copy button on a row yields a link that
+  plays and names the sound wherever it is pasted.
 
 Extract deliberately knows nothing about realms and Upload nothing about
 recordings: the bridge between them is a downloaded zip.
@@ -81,6 +88,19 @@ github.com verbatim (see `docker/nginx.conf.template`); Vite's dev server does
 the same, with `VITE_GITHUB_CLIENT_ID` in `.env.local` supplying the id. The
 forwarder holds no secret and no state. Tokens are scoped to `public_repo` and
 live in the browser's localStorage until sign-out.
+
+**Sharing one sound.** The server answers two routes besides the app itself.
+`/stream/<realm>/<trigger>.ogg` proxies the file from raw.githubusercontent.com
+with `content-disposition: attachment` stripped, which is the header that makes
+a link to GitHub download a sound instead of playing it. `/s/<realm>/<trigger>.ogg`
+returns a small page carrying that one sound's Open Graph tags and an audio
+player, because a chat client's crawler reads tags out of HTML and never runs
+the app's JavaScript. Both live in `docker/nginx.conf.template`, and both are
+mirrored in `vite.config.ts` for development. The path is reflected into that
+page's markup and nginx cannot escape anything, so the safety is the location's
+character class: every path in the repo is lowercase letters, digits, space and
+`. _ - ! ( ) +`, and a request carrying anything else matches no location and
+falls through to the app.
 
 **How the PR is made.** Everything runs in the tab against the REST API: ensure
 a fork exists (creating one is idempotent and asynchronous, so it is polled),
@@ -391,13 +411,16 @@ frontend/src/
 │                 try next when the backend fails)
 ├── workers/      the VAD/ASR/encode worker -- Web Audio is main-thread only,
 │                 so decoding stays outside it and everything else moves in
-├── store/        useJob (Extract) · useUpload · useGithub · worker client
-├── lib/          github (device flow · fork · PR) · realm list · gaps · icons
+├── store/        useJob (Extract) · useUpload · useGithub · useReview ·
+│                 useExplore · worker client
+├── lib/          github (device flow · fork · PR) · realm list · sound index
+│                 and its tree · gaps · icons
 ├── components/
 │   ├── extract/  start · processing · editor · waveform · clip editor
 │   ├── upload/   the realm form: combobox · drop area · sign-in and PR
 │   ├── review/   PR picker · sound tree · verdicts and merge
-│   └──           Navbar (the three tabs) · Icon · GithubSignIn
+│   ├── explore/  the whole repo as a windowed tree, filter and share
+│   └──           Navbar (the four tabs) · Icon · GithubSignIn
 └── styles/       design tokens taken from metastruct.net
 ```
 

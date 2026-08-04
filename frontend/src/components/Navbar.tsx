@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Icon } from './Icon'
 
 /**
- * metastruct.net's navbar chrome, carrying this app's three tabs.
+ * metastruct.net's navbar chrome, carrying this app's tabs.
  *
  * The visual shell (logo, heights, hover behaviour) is still theirs, but the
  * items are ours: the site links that used to fill the bar belonged to the rest
@@ -11,12 +11,16 @@ import { Icon } from './Icon'
  */
 
 export type { Tab } from '../store/useTabs'
+import type { IconName } from '../lib/icons'
 import type { Tab } from '../store/useTabs'
 
-const TABS: { id: Tab; label: string; icon: 'scissors' | 'cloudUpload' | 'clipboardCheck' }[] = [
+// Extract, Upload and Review are the pipeline, in the order a sound travels it.
+// Explore is not a step in it, so it sits after rather than between.
+const TABS: { id: Tab; label: string; icon: IconName }[] = [
   { id: 'extract', label: 'Extract', icon: 'scissors' },
   { id: 'upload', label: 'Upload', icon: 'cloudUpload' },
   { id: 'review', label: 'Review', icon: 'clipboardCheck' },
+  { id: 'explore', label: 'Explore', icon: 'compass' },
 ]
 
 interface Props {

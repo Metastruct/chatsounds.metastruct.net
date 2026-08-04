@@ -33,6 +33,31 @@ export const UPSTREAM = { owner: 'Metastruct', repo: 'garrysmod-chatsounds', bra
 /** Where a realm's sounds live in the repo. */
 export const REALM_ROOT = 'sound/chatsounds/autoadd'
 
+/**
+ * Where one sound is shared from and streamed from, given its path under
+ * REALM_ROOT. Both are paths on this origin, to be resolved against it.
+ *
+ * Not a raw.githubusercontent.com link, which is the obvious answer and the
+ * wrong one: GitHub serves every .ogg as `content-disposition: attachment`, so
+ * such a link downloads the file rather than playing it, and a chat client
+ * offers no player and no name for it. This origin answers /s/ with a page
+ * carrying that sound's Open Graph tags and /stream/ with the same bytes minus
+ * the attachment header. Both are served by nginx, and by the dev server in
+ * development; see docker/nginx.conf.template.
+ */
+export function soundSharePath(pathUnderRealmRoot: string): string {
+  return `/s/${encodePathSegments(pathUnderRealmRoot)}`
+}
+
+export function soundStreamPath(pathUnderRealmRoot: string): string {
+  return `/stream/${encodePathSegments(pathUnderRealmRoot)}`
+}
+
+/** Per segment, so the slashes survive but a space or a # does not end the path. */
+function encodePathSegments(path: string): string {
+  return path.split('/').map(encodeURIComponent).join('/')
+}
+
 const API = 'https://api.github.com'
 
 // ---------------------------------------------------------------------------
@@ -158,12 +183,16 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 // REST
 
 /**
- * One authenticated REST call. `allow` lists non-2xx statuses the caller wants
- * to inspect rather than have thrown, e.g. the 409 a fork sync answers when
- * histories diverged, or the 405 a merge answers when a method is disallowed.
+ * One REST call. `allow` lists non-2xx statuses the caller wants to inspect
+ * rather than have thrown, e.g. the 409 a fork sync answers when histories
+ * diverged, or the 405 a merge answers when a method is disallowed.
+ *
+ * A null token means an anonymous call. Everything that writes needs a token,
+ * but reading public repo data does not, and Explore reads plenty of it before
+ * anyone signs in. The only cost is the rate limit: 60 an hour instead of 5000.
  */
 async function api<T>(
-  token: string,
+  token: string | null,
   method: string,
   path: string,
   body?: unknown,
@@ -173,7 +202,7 @@ async function api<T>(
     method,
     headers: {
       Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${token}`,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -461,14 +490,16 @@ export async function listPrFiles(token: string, number: number): Promise<PrChan
 }
 
 /**
- * A changed file's bytes, via the head repo's blob.
+ * A file's bytes, via its blob.
  *
- * The blobs API rather than the raw URL because it is authenticated (5000
- * calls an hour instead of 60) and served from api.github.com, which sends the
- * CORS headers this cross-origin-isolated page needs.
+ * The blobs API rather than the raw URL because it is served from
+ * api.github.com, which sends the CORS headers this cross-origin-isolated page
+ * needs, and because a token raises the limit from 60 calls an hour to 5000.
+ * The token is optional: Explore plays sounds for signed-out visitors too, and
+ * a public repo's blobs are readable without one.
  */
 export async function fetchBlobBytes(
-  token: string,
+  token: string | null,
   owner: string,
   repo: string,
   sha: string,

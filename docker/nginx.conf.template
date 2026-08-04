@@ -1,6 +1,18 @@
 # Rendered at container start by 20-make-cert.sh, which substitutes __HTTPS_PORT__
 # and __GITHUB_CLIENT_ID__.
 
+# One sound's path, still percent-encoded, for the /s/ and /stream/ routes.
+#
+# nginx decodes the URI before matching a location, which is what makes the
+# character classes down there a real filter: a smuggled %3C is a < by then and
+# simply does not match. But the URLs those routes go on to build have to be
+# encoded again, and nginx cannot encode, so the raw form is taken off
+# $request_uri here. A trigger with a space in it needs both halves of this.
+map $request_uri $chatsound_path {
+    default "";
+    "~^/(?:s|stream)/(?<encoded>[^?#]+)"  $encoded;
+}
+
 # Plain HTTP exists only to send you to HTTPS. WebGPU and SharedArrayBuffer are
 # both restricted to secure contexts, so an http:// origin silently loses the GPU
 # and drops WebAssembly to a single thread.
@@ -94,6 +106,90 @@ server {
         proxy_ssl_server_name on;
         proxy_set_header Host github.com;
         proxy_set_header Accept application/json;
+    }
+
+    # --- sharing one sound -------------------------------------------------
+    # A link to raw.githubusercontent.com is the obvious way to hand someone a
+    # sound and the wrong one: GitHub serves every .ogg as
+    # "content-disposition: attachment", so the link downloads the file instead
+    # of playing it, and a chat client has no name to put on it and no player to
+    # offer. /stream/ is the same bytes without that header, and /s/ is a page
+    # carrying that one sound's Open Graph tags, which is what an embed reads.
+    #
+    # The character classes below are the whole safety story, because $s_realm
+    # and $s_name are reflected into the HTML and nginx cannot escape anything.
+    # Every path in the repo is lowercase letters, digits, space and . _ - ! ( )
+    # + (checked against all 38,000 of them), so nothing carrying < > " ' & or %
+    # matches either location, and what does not match is never echoed. The high
+    # bytes are there for the one trigger with a typographic apostrophe in it;
+    # they cannot spell an HTML metacharacter, which is ASCII to a byte.
+    location ~ "^/stream/[a-z0-9 ._!()+/\x80-\xff-]+\.ogg$" {
+        set $raw "https://raw.githubusercontent.com";
+        proxy_pass $raw/Metastruct/garrysmod-chatsounds/master/sound/chatsounds/autoadd/$chatsound_path;
+        proxy_ssl_server_name on;
+        proxy_set_header Host raw.githubusercontent.com;
+        # The one that matters: without this the browser downloads the sound.
+        proxy_hide_header Content-Disposition;
+        proxy_hide_header Content-Security-Policy;
+        proxy_hide_header Set-Cookie;
+        # GitHub sends its own versions of the three below, and add_header
+        # appends rather than replaces, so without hiding them first every
+        # response carries each one twice with two different values.
+        proxy_hide_header Cross-Origin-Resource-Policy;
+        proxy_hide_header Access-Control-Allow-Origin;
+        proxy_hide_header Cache-Control;
+        # Being played from somewhere else is the entire point of this route, so
+        # it opts out of the isolation the app pages want.
+        add_header Cross-Origin-Resource-Policy cross-origin always;
+        add_header Access-Control-Allow-Origin "*" always;
+        add_header Cache-Control "public, max-age=86400" always;
+    }
+
+    location ~ "^/s/(?<s_realm>[a-z0-9 ._!()+\x80-\xff-]+)/(?<s_name>[a-z0-9 ._!()+/\x80-\xff-]+)\.ogg$" {
+        default_type text/html;
+        charset utf-8;
+        set $public "$scheme://$http_host";
+        add_header Cache-Control "public, max-age=3600" always;
+        # No COOP/COEP here: this page is one audio element and no bundle, so it
+        # needs no SharedArrayBuffer, and isolation would only cost it the
+        # ability to be framed by whoever the link was sent to.
+        return 200 '<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>$s_name in $s_realm - Meta Construct chatsounds</title>
+<link rel="canonical" href="$public/s/$chatsound_path">
+<meta name="theme-color" content="#212121">
+<meta property="og:type" content="music.song">
+<meta property="og:site_name" content="Meta Construct">
+<meta property="og:title" content="$s_name">
+<meta property="og:description" content="a chatsound in $s_realm">
+<meta property="og:url" content="$public/s/$chatsound_path">
+<meta property="og:audio" content="$public/stream/$chatsound_path">
+<meta property="og:audio:secure_url" content="$public/stream/$chatsound_path">
+<meta property="og:audio:type" content="audio/ogg">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<style>
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:#212121;color:#fefefe;font-family:system-ui,-apple-system,sans-serif}
+main{padding:2rem;max-width:34rem;text-align:center}
+.realm{margin:0;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.85rem;color:rgba(254,254,254,.5)}
+h1{margin:.3rem 0 1.4rem;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:1.4rem;font-weight:600;overflow-wrap:anywhere}
+audio{width:100%}
+a{display:inline-block;margin-top:1.6rem;color:#09b387;font-size:.85rem}
+</style>
+</head>
+<body>
+<main>
+<p class="realm">$s_realm/</p>
+<h1>$s_name</h1>
+<audio controls autoplay preload="auto" src="/stream/$chatsound_path"></audio>
+<p><a href="/">every chatsound at Meta Construct</a></p>
+</main>
+</body>
+</html>
+';
     }
 
     # Hashed build assets, the font, and the VAD model never change in place.

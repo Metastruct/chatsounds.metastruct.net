@@ -738,3 +738,130 @@
   margin-top: 0.35rem;
   font-size: 0.8rem;
 }
+
+/* --- explore tab ------------------------------------------------------- */
+
+/* The tree draws only the rows in view, which needs a scroll box of its own
+   with a known height. Each row is given its exact height inline, from the
+   same numbers the scroll arithmetic uses, so nothing in here may grow one: a
+   wrapped trigger name would put every row below it out of step. That is why
+   the names truncate rather than wrap. */
+
+/* No narrower cap than the container's: 42,000 rows want every pixel, and
+   width is what keeps a long trigger name off the ellipsis. */
+.explore-toolbar {
+  margin-top: 0.75rem;
+  gap: 0.5rem;
+}
+.explore-search {
+  max-width: 22rem;
+}
+.explore-status {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+}
+.explore-empty {
+  margin: 2rem;
+}
+
+.explore-scroll {
+  /* The title, search and count above it, plus the section's own padding
+     below. Getting this wrong puts a second scrollbar on the page beside the
+     one this box already has. */
+  height: calc(100dvh - 14.75rem);
+  min-height: 18rem;
+  overflow-y: auto;
+  margin-top: 0.75rem;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+}
+.explore-spacer {
+  position: relative;
+}
+.explore-window {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+.explore-row {
+  /* Height comes from the row itself: see boxOf in ExploreTree.tsx. */
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: var(--control-h-sm) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0 0.6rem;
+}
+.explore-row.is-depth-1 {
+  padding-left: 1.6rem;
+}
+.explore-row.is-depth-2 {
+  padding-left: 2.6rem;
+}
+/* Realms carry the eye down a list where most rows are sounds, so they get the
+   separator and the tab's colour; the rows between them stay quiet. They are
+   also the accordion handles, hence a button stripped back to a row. */
+.explore-row.is-realm {
+  border-top: 1px solid var(--border-soft);
+  color: var(--accent);
+  width: 100%;
+  margin: 0;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.explore-row.is-realm:hover {
+  background: var(--surface-hi, rgba(255, 255, 255, 0.03));
+}
+.explore-row.is-realm:first-child {
+  border-top: none;
+}
+.explore-mark {
+  /* The chevron turns rather than swaps, so the eye follows the same shape. */
+  transition: transform 0.12s ease;
+}
+.explore-row.is-group {
+  color: var(--text-muted);
+}
+.explore-mark {
+  text-align: center;
+  font-size: 0.7rem;
+}
+.explore-name {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.explore-count {
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.explore-row.is-sound .button {
+  /* The button is taller than the row it sits in; scaling it down keeps the
+     row height honest without inventing a second button size. */
+  height: 1.5rem;
+  width: 1.5rem;
+  min-width: 0;
+}
+/* Quiet until wanted: it is on every one of 38,000 rows, and playing a sound is
+   the reason people are here. */
+.explore-copy {
+  opacity: 0.35;
+  transition: opacity 0.12s ease;
+}
+.explore-row:hover .explore-copy,
+.explore-copy:focus-visible {
+  opacity: 1;
+}
+.explore-copy.is-copied {
+  opacity: 1;
+  color: var(--accent);
+}

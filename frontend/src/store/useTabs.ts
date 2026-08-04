@@ -8,7 +8,7 @@
 
 import { create } from 'zustand'
 
-export type Tab = 'extract' | 'upload' | 'review'
+export type Tab = 'extract' | 'upload' | 'review' | 'explore'
 
 interface TabState {
   tab: Tab
