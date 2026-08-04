@@ -168,6 +168,13 @@ server {
         # No COOP/COEP here: this page is one audio element and no bundle, so it
         # needs no SharedArrayBuffer, and isolation would only cost it the
         # ability to be framed by whoever the link was sent to.
+        #
+        # The only Open Graph left is the player. A title, description and site
+        # name all render as extra lines above it, and three lines of chrome
+        # around a three second sound is what makes an embed take over a
+        # channel. The <title> stays for the browser tab, which is a different
+        # audience. og:audio is gone with them: Discord has never read it, so
+        # it was decoration.
         return 200 '<!doctype html>
 <html lang="en">
 <head>
@@ -177,24 +184,16 @@ server {
 <title>$s_name in $s_realm - Meta Construct chatsounds</title>
 <link rel="canonical" href="$public/s/$chatsound_path">
 <meta name="theme-color" content="#212121">
-<meta property="og:type" content="music.song">
-<meta property="og:site_name" content="Meta Construct">
-<meta property="og:title" content="$s_name">
-<meta property="og:description" content="a chatsound in $s_realm">
-<meta property="og:url" content="$public/s/$chatsound_path">
-<meta property="og:audio" content="$public/stream/$chatsound_path">
-<meta property="og:audio:secure_url" content="$public/stream/$chatsound_path">
-<meta property="og:audio:type" content="audio/ogg">
 <meta property="og:video" content="$public/mp4/$chatsound_mp4">
 <meta property="og:video:secure_url" content="$public/mp4/$chatsound_mp4">
 <meta property="og:video:type" content="video/mp4">
 <meta property="og:video:width" content="480">
-<meta property="og:video:height" content="480">
+<meta property="og:video:height" content="120">
 <meta property="twitter:card" content="player">
 <meta property="twitter:player:stream" content="$public/mp4/$chatsound_mp4">
 <meta property="twitter:player:stream:content_type" content="video/mp4">
 <meta property="twitter:player:width" content="480">
-<meta property="twitter:player:height" content="480">
+<meta property="twitter:player:height" content="120">
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <style>
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:#212121;color:#fefefe;font-family:system-ui,-apple-system,sans-serif}

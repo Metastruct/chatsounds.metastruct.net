@@ -153,10 +153,15 @@ function ffmpeg(oggPath, mp4Path) {
     // agrees on, and a PNG arrives as rgb24.
     '-pix_fmt',
     'yuv420p',
+    // The source is Ogg Vorbis, already lossy, and this is a preview in a chat
+    // client. Re-encoding it at 128k stereo spent bytes on detail the input
+    // never had; mono at 64k is most of an embed's weight saved.
     '-c:a',
     'aac',
+    '-ac',
+    '1',
     '-b:a',
-    '128k',
+    '64k',
     // Stop when the audio does, rather than looping the image forever.
     '-shortest',
     // Moves the index to the front, so a player can start without the whole

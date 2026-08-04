@@ -89,13 +89,19 @@ live in the browser's localStorage until sign-out.
 - `/stream/<realm>/<trigger>.ogg` proxies the file from raw.githubusercontent.com
   with `content-disposition: attachment` stripped, the header that makes a link
   to GitHub download a sound instead of playing it.
-- `/mp4/<realm>/<trigger>.mp4` is the same sound as an MP4, the audio re-encoded
-  to AAC under a still frame of the logo. Discord has never supported the
+- `/mp4/<realm>/<trigger>.mp4` is the same sound as an MP4: the audio as mono
+  64k AAC, which is plenty for a preview of an already-lossy Vorbis file, under
+  a 4:1 still of the logo, because the embed is as tall as the video is. Discord has never supported the
   OpenGraph audio tags and reserves its player embeds for a few whitelisted
   music services, so an MP4 behind `og:video` is the only way a link from
   anybody's domain plays inline. `mp4d` (`docker/mp4d.mjs`) builds one the first
   time it is asked for and nginx serves it off a volume every time after, so
   only sounds somebody actually shares are ever encoded.
+
+The share page's only Open Graph tags are the player: a title, description and
+site name each render as another line above it, and that chrome is what makes an
+embed of a three second sound take over a channel. Its `<title>` stays for the
+browser tab, which is a different audience.
 
 All three live in `docker/nginx.conf.template` and are mirrored in
 `vite.config.ts` for development. The path is reflected into the share page's

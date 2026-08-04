@@ -21,15 +21,23 @@ RUN apk add --no-cache openssl ffmpeg nodejs
 
 COPY --from=build /build/dist /usr/share/nginx/html
 
-# The still frame every shared sound plays under. Squared and scaled here so the
-# transcode at request time is only ever audio work. Nearest-neighbour because
-# the source is pixel art and anything smoother turns it to mush; the crop takes
-# the shorter side, so a source that is not quite square loses a row rather than
-# stretching.
+# The still frame every shared sound plays under, built here so the transcode at
+# request time is only ever audio work.
+#
+# 4:1 because Discord sizes the embed from the video, and height is the whole
+# cost of an embed: a square one takes over the channel, this one draws as a bar
+# about a hundred pixels tall. The logo is square, so the frame is filled with a
+# blown-up blurred copy of it and the sharp one sits on top; black bars either
+# side would read as a broken video. Area rather than nearest on the sharp copy
+# because at this size the logo is being shrunk, and nearest drops pixel rows
+# unevenly when it goes down rather than up.
 COPY docker/mp4d.mjs /opt/chatsounds/mp4d.mjs
 COPY docker/share-cover.png /opt/chatsounds/cover-source.png
 RUN ffmpeg -hide_banner -loglevel error -y -i /opt/chatsounds/cover-source.png \
-        -vf "crop='min(iw,ih)':'min(iw,ih)',scale=480:480:flags=neighbor" \
+        -filter_complex "[0:v]split=2[bg][fg]; \
+            [bg]scale=480:120:force_original_aspect_ratio=increase,crop=480:120,boxblur=24:3[blurred]; \
+            [fg]crop='min(iw,ih)':'min(iw,ih)',scale=120:120:flags=area[sharp]; \
+            [blurred][sharp]overlay=(W-w)/2:(H-h)/2" \
         /opt/chatsounds/cover.png \
     && rm /opt/chatsounds/cover-source.png
 # Two shapes: standalone, which makes its own certificate and speaks HTTPS, and

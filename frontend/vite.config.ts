@@ -101,7 +101,6 @@ async function streamSound(encoded: string, res: import('node:http').ServerRespo
  */
 async function buildMp4(encoded: string, decoded: string, res: import('node:http').ServerResponse) {
   const { mkdir, readFile, writeFile } = await import('node:fs/promises')
-  const { spawn } = await import('node:child_process')
   const { dirname, resolve } = await import('node:path')
 
   const cache = resolve('node_modules/.cache/chatsounds-mp4', decoded)
@@ -109,8 +108,7 @@ async function buildMp4(encoded: string, decoded: string, res: import('node:http
   try {
     bytes = await readFile(cache)
   } catch {
-    const soundUrl = `${UPSTREAM_RAW}/${encoded.replace(/\.mp4$/, '.ogg')}`
-    const upstream = await fetch(soundUrl)
+    const upstream = await fetch(`${UPSTREAM_RAW}/${encoded.replace(/\.mp4$/, '.ogg')}`)
     if (!upstream.ok) {
       res.statusCode = upstream.status
       return res.end()
@@ -118,30 +116,7 @@ async function buildMp4(encoded: string, decoded: string, res: import('node:http
     await mkdir(dirname(cache), { recursive: true })
     const oggPath = `${cache}.ogg`
     await writeFile(oggPath, Buffer.from(await upstream.arrayBuffer()))
-    await new Promise<void>((ok, fail) => {
-      const child = spawn(
-        'ffmpeg',
-        // Kept in step with docker/mp4d.mjs, plus the squaring the image build
-        // does there ahead of time.
-        // biome-ignore format: reads as one command line
-        [
-          '-hide_banner', '-loglevel', 'error', '-y',
-          '-loop', '1', '-framerate', '2', '-i', resolve('../docker/share-cover.png'),
-          '-i', oggPath,
-          '-vf', "crop='min(iw,ih)':'min(iw,ih)',scale=480:480:flags=neighbor",
-          '-c:v', 'libx264', '-tune', 'stillimage', '-preset', 'veryfast', '-crf', '30',
-          '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k',
-          '-shortest', '-movflags', '+faststart', cache,
-        ],
-        { stdio: ['ignore', 'ignore', 'pipe'] },
-      )
-      let stderr = ''
-      child.stderr.on('data', (chunk) => {
-        stderr += chunk
-      })
-      child.on('error', () => fail(new Error('ffmpeg is not on PATH, so /mp4/ cannot answer here')))
-      child.on('close', (code) => (code === 0 ? ok() : fail(new Error(stderr.trim()))))
-    })
+    await ffmpegRun(SOUND_TO_MP4(await cover(), oggPath, cache))
     bytes = await readFile(cache)
   }
 
@@ -151,6 +126,60 @@ async function buildMp4(encoded: string, decoded: string, res: import('node:http
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
   res.end(bytes)
+}
+
+/** The 16:9 still, built once, exactly as the Dockerfile builds it. */
+let coverPromise: Promise<string> | null = null
+function cover(): Promise<string> {
+  coverPromise ??= (async () => {
+    const { mkdir, stat } = await import('node:fs/promises')
+    const { resolve } = await import('node:path')
+    const out = resolve('node_modules/.cache/chatsounds-mp4/cover.png')
+    await mkdir(resolve('node_modules/.cache/chatsounds-mp4'), { recursive: true })
+    try {
+      await stat(out)
+      return out
+    } catch {
+      /* build it */
+    }
+    // biome-ignore format: reads as one command line
+    await ffmpegRun([
+      '-hide_banner', '-loglevel', 'error', '-y', '-i', resolve('../docker/share-cover.png'),
+      '-filter_complex',
+      "[0:v]split=2[bg][fg];" +
+        "[bg]scale=480:120:force_original_aspect_ratio=increase,crop=480:120,boxblur=24:3[blurred];" +
+        "[fg]crop='min(iw,ih)':'min(iw,ih)',scale=120:120:flags=area[sharp];" +
+        "[blurred][sharp]overlay=(W-w)/2:(H-h)/2",
+      out,
+    ])
+    return out
+  })()
+  return coverPromise
+}
+
+/** Kept in step with the argument list in docker/mp4d.mjs. */
+// biome-ignore format: reads as one command line
+const SOUND_TO_MP4 = (coverPath: string, oggPath: string, out: string) => [
+  '-hide_banner', '-loglevel', 'error', '-y',
+  '-loop', '1', '-framerate', '2', '-i', coverPath,
+  '-i', oggPath,
+  '-t', '300',
+  '-c:v', 'libx264', '-tune', 'stillimage', '-preset', 'veryfast', '-crf', '30',
+  '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-ac', '1', '-b:a', '64k',
+  '-shortest', '-movflags', '+faststart', out,
+]
+
+async function ffmpegRun(args: string[]): Promise<void> {
+  const { spawn } = await import('node:child_process')
+  return new Promise((ok, fail) => {
+    const child = spawn('ffmpeg', args, { stdio: ['ignore', 'ignore', 'pipe'] })
+    let stderr = ''
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk
+    })
+    child.on('error', () => fail(new Error('ffmpeg is not on PATH, so /mp4/ cannot answer here')))
+    child.on('close', (code) => (code === 0 ? ok() : fail(new Error(stderr.trim()))))
+  })
 }
 
 function sharePage(s: {
@@ -169,24 +198,16 @@ function sharePage(s: {
 <title>${s.name} in ${s.realm} - Meta Construct chatsounds</title>
 <link rel="canonical" href="${s.origin}/s/${s.encoded}">
 <meta name="theme-color" content="#212121">
-<meta property="og:type" content="music.song">
-<meta property="og:site_name" content="Meta Construct">
-<meta property="og:title" content="${s.name}">
-<meta property="og:description" content="a chatsound in ${s.realm}">
-<meta property="og:url" content="${s.origin}/s/${s.encoded}">
-<meta property="og:audio" content="${s.origin}/stream/${s.encoded}">
-<meta property="og:audio:secure_url" content="${s.origin}/stream/${s.encoded}">
-<meta property="og:audio:type" content="audio/ogg">
 <meta property="og:video" content="${s.origin}/mp4/${s.mp4}">
 <meta property="og:video:secure_url" content="${s.origin}/mp4/${s.mp4}">
 <meta property="og:video:type" content="video/mp4">
 <meta property="og:video:width" content="480">
-<meta property="og:video:height" content="480">
+<meta property="og:video:height" content="120">
 <meta property="twitter:card" content="player">
 <meta property="twitter:player:stream" content="${s.origin}/mp4/${s.mp4}">
 <meta property="twitter:player:stream:content_type" content="video/mp4">
 <meta property="twitter:player:width" content="480">
-<meta property="twitter:player:height" content="480">
+<meta property="twitter:player:height" content="120">
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <style>
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:#212121;color:#fefefe;font-family:system-ui,-apple-system,sans-serif}
