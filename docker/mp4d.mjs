@@ -6,9 +6,9 @@
  * and the player embeds it does render are reserved for a handful of
  * whitelisted music services. The one thing it plays from anybody's domain is
  * og:video pointing at an MP4, so that is what a shared sound has to be: the
- * Vorbis audio re-encoded to AAC, under a still frame of the logo, in an MP4
- * container. cs.spiralp.xyz reaches the same conclusion and serves the same
- * shape of file.
+ * Vorbis audio re-encoded to AAC, under a black frame, in an MP4 container.
+ * cs.spiralp.xyz reaches the same conclusion and serves the same shape of
+ * file.
  *
  * Only sounds somebody actually shares are ever built, and each one is built
  * once. The repo holds 38,000 sounds and this cache will hold the few dozen
@@ -27,7 +27,6 @@ import { dirname, join } from 'node:path'
 
 const PORT = Number(process.env.MP4D_PORT ?? 8081)
 const CACHE_ROOT = process.env.MP4D_CACHE ?? '/var/cache/chatsounds-mp4'
-const COVER = process.env.MP4D_COVER ?? '/opt/chatsounds/cover.png'
 const UPSTREAM =
   process.env.MP4D_UPSTREAM ??
   'https://raw.githubusercontent.com/Metastruct/garrysmod-chatsounds/master/sound/chatsounds/autoadd'
@@ -129,14 +128,34 @@ function ffmpeg(oggPath, mp4Path) {
     '-loglevel',
     'error',
     '-y',
-    // The cover is a still, so one frame every half second is plenty: x264
-    // spends almost nothing on frames identical to the last.
-    '-loop',
-    '1',
-    '-framerate',
-    '2',
+    // Discord draws its own controls over the bottom of the video, so anything
+    // in the frame is a picture nobody asked for sitting above a player. The
+    // frame is therefore black, and it is 400x144 because that is the box
+    // Discord reserves for embedded media, measured off the client: the
+    // loading overlay it puts up before the video arrives is 400x144 CSS
+    // pixels, and it holds that height afterwards whatever the video turns out
+    // to be. Neither og:video:width/height nor an og:image moves it.
+    //
+    // So a flatter video buys no space back, it only leaves the difference
+    // empty under the player. Filling the box exactly is what makes the embed
+    // stop resizing as it loads and stop trailing dead space: same footprint
+    // Discord was always going to take, with a player in it rather than a bar
+    // and a hole.
+    //
+    // A generated colour source rather than an image on disk, so nothing has to
+    // be built into the container for this.
+    //
+    // 15fps on a frame that never changes looks like waste and is not. The
+    // frame rate is what decides how many frames a short sound gets, and most
+    // chatsounds are short: at 2fps anything under half a second came out as a
+    // one-frame video, which Discord answers with "Image failed to load". x264
+    // spends almost nothing on a frame identical to the last and less than that
+    // on a flat black one, so the whole difference between 2fps and 15fps is
+    // about six percent of a file whose weight is all audio anyway.
+    '-f',
+    'lavfi',
     '-i',
-    COVER,
+    'color=c=black:s=400x144:r=15',
     '-i',
     oggPath,
     '-t',
@@ -150,7 +169,7 @@ function ffmpeg(oggPath, mp4Path) {
     '-crf',
     '30',
     // Without this the file plays nowhere: yuv420p is what every decoder
-    // agrees on, and a PNG arrives as rgb24.
+    // agrees on, and a generated frame does not arrive as one.
     '-pix_fmt',
     'yuv420p',
     // The source is Ogg Vorbis, already lossy, and this is a preview in a chat

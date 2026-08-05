@@ -116,7 +116,7 @@ async function buildMp4(encoded: string, decoded: string, res: import('node:http
     await mkdir(dirname(cache), { recursive: true })
     const oggPath = `${cache}.ogg`
     await writeFile(oggPath, Buffer.from(await upstream.arrayBuffer()))
-    await ffmpegRun(SOUND_TO_MP4(await cover(), oggPath, cache))
+    await ffmpegRun(SOUND_TO_MP4(oggPath, cache))
     bytes = await readFile(cache)
   }
 
@@ -128,40 +128,15 @@ async function buildMp4(encoded: string, decoded: string, res: import('node:http
   res.end(bytes)
 }
 
-/** The 16:9 still, built once, exactly as the Dockerfile builds it. */
-let coverPromise: Promise<string> | null = null
-function cover(): Promise<string> {
-  coverPromise ??= (async () => {
-    const { mkdir, stat } = await import('node:fs/promises')
-    const { resolve } = await import('node:path')
-    const out = resolve('node_modules/.cache/chatsounds-mp4/cover.png')
-    await mkdir(resolve('node_modules/.cache/chatsounds-mp4'), { recursive: true })
-    try {
-      await stat(out)
-      return out
-    } catch {
-      /* build it */
-    }
-    // biome-ignore format: reads as one command line
-    await ffmpegRun([
-      '-hide_banner', '-loglevel', 'error', '-y', '-i', resolve('../docker/share-cover.png'),
-      '-filter_complex',
-      "[0:v]split=2[bg][fg];" +
-        "[bg]scale=480:120:force_original_aspect_ratio=increase,crop=480:120,boxblur=24:3[blurred];" +
-        "[fg]crop='min(iw,ih)':'min(iw,ih)',scale=120:120:flags=area[sharp];" +
-        "[blurred][sharp]overlay=(W-w)/2:(H-h)/2",
-      out,
-    ])
-    return out
-  })()
-  return coverPromise
-}
-
-/** Kept in step with the argument list in docker/mp4d.mjs. */
+/**
+ * Kept in step with the argument list in docker/mp4d.mjs, including the black
+ * 400x144 frame, which is the box Discord reserves for embedded media whatever
+ * the video's own size says. The reasoning is there.
+ */
 // biome-ignore format: reads as one command line
-const SOUND_TO_MP4 = (coverPath: string, oggPath: string, out: string) => [
+const SOUND_TO_MP4 = (oggPath: string, out: string) => [
   '-hide_banner', '-loglevel', 'error', '-y',
-  '-loop', '1', '-framerate', '2', '-i', coverPath,
+  '-f', 'lavfi', '-i', 'color=c=black:s=400x144:r=15',
   '-i', oggPath,
   '-t', '300',
   '-c:v', 'libx264', '-tune', 'stillimage', '-preset', 'veryfast', '-crf', '30',
@@ -201,13 +176,13 @@ function sharePage(s: {
 <meta property="og:video" content="${s.origin}/mp4/${s.mp4}">
 <meta property="og:video:secure_url" content="${s.origin}/mp4/${s.mp4}">
 <meta property="og:video:type" content="video/mp4">
-<meta property="og:video:width" content="480">
-<meta property="og:video:height" content="120">
+<meta property="og:video:width" content="400">
+<meta property="og:video:height" content="144">
 <meta property="twitter:card" content="player">
 <meta property="twitter:player:stream" content="${s.origin}/mp4/${s.mp4}">
 <meta property="twitter:player:stream:content_type" content="video/mp4">
-<meta property="twitter:player:width" content="480">
-<meta property="twitter:player:height" content="120">
+<meta property="twitter:player:width" content="400">
+<meta property="twitter:player:height" content="144">
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <style>
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:#212121;color:#fefefe;font-family:system-ui,-apple-system,sans-serif}
