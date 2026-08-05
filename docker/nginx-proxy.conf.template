@@ -187,13 +187,13 @@ server {
 <meta property="og:video" content="$public/mp4/$chatsound_mp4">
 <meta property="og:video:secure_url" content="$public/mp4/$chatsound_mp4">
 <meta property="og:video:type" content="video/mp4">
-<meta property="og:video:width" content="480">
-<meta property="og:video:height" content="120">
+<meta property="og:video:width" content="400">
+<meta property="og:video:height" content="144">
 <meta property="twitter:card" content="player">
 <meta property="twitter:player:stream" content="$public/mp4/$chatsound_mp4">
 <meta property="twitter:player:stream:content_type" content="video/mp4">
-<meta property="twitter:player:width" content="480">
-<meta property="twitter:player:height" content="120">
+<meta property="twitter:player:width" content="400">
+<meta property="twitter:player:height" content="144">
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <style>
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:#212121;color:#fefefe;font-family:system-ui,-apple-system,sans-serif}
