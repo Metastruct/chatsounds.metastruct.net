@@ -26,6 +26,29 @@ map $request_uri $chatsound_mp4 {
     "~^/s/(?<stem>[^?#]+)\\.ogg$"  "$stem.mp4";
 }
 
+# Only our own page may drive the /fetch and /yt proxy routes. Sec-Fetch-Site
+# (checked in the locations) is the real gate: the browser sets it and page
+# script cannot forge it. Origin and Referer are belt and braces. A same-origin
+# GET carries no Origin, so absence is fine and only a foreign value is refused;
+# Referer is present on our requests but some policies strip it, so absence is
+# allowed too. localhost is here so the dev server and the docker quickstart
+# work; the deployment this is written for is chatsounds.metastruct.net. An
+# empty value maps to 0 (allowed) and anything unlisted to 1 (refused).
+map $http_origin $bad_proxy_origin {
+    default                                  1;
+    ""                                       0;
+    "https://chatsounds.metastruct.net"      0;
+    "~^https?://localhost(:[0-9]+)?$"        0;
+    "~^https?://127\.0\.0\.1(:[0-9]+)?$"     0;
+}
+map $http_referer $bad_proxy_referer {
+    default                                  1;
+    ""                                       0;
+    "~^https://chatsounds\.metastruct\.net/" 0;
+    "~^https?://localhost(:[0-9]+)?/"        0;
+    "~^https?://127\.0\.0\.1(:[0-9]+)?/"     0;
+}
+
 server {
     listen 8080;
     server_name _;
@@ -101,6 +124,9 @@ server {
     # both calls go through this origin. Only an 11-char video id and hosts in
     # api download domain get through; the domain is theirs to rotate.
     location = /yt/status {
+        if ($http_sec_fetch_site != "same-origin") { return 403; }
+        if ($bad_proxy_origin) { return 403; }
+        if ($bad_proxy_referer) { return 403; }
         if ($arg_id !~ "^[A-Za-z0-9_-]{11}$") { return 403; }
         set $mp3cow "https://api.mp3cow.com";
         proxy_pass $mp3cow/z.php$is_args$args;
@@ -112,6 +138,9 @@ server {
         proxy_set_header Accept "*/*";
     }
     location = /yt/dl {
+        if ($http_sec_fetch_site != "same-origin") { return 403; }
+        if ($bad_proxy_origin) { return 403; }
+        if ($bad_proxy_referer) { return 403; }
         if ($arg_h !~ "^([a-z0-9-]+\.)*wejfknwejfkerf\.org$") { return 403; }
         if ($arg_i !~ "^[0-9a-f]+$") { return 403; }
         proxy_pass https://$arg_h/dl.php?id=$arg_i;
@@ -186,6 +215,9 @@ server {
     # only forwards the path. Buffering off so bytes and the size flow through
     # for the progress bar, and a long timeout for a slow or large download.
     location = /fetch {
+        if ($http_sec_fetch_site != "same-origin") { return 403; }
+        if ($bad_proxy_origin) { return 403; }
+        if ($bad_proxy_referer) { return 403; }
         proxy_pass http://127.0.0.1:8081;
         proxy_read_timeout 300s;
         proxy_buffering off;

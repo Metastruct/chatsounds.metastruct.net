@@ -100,12 +100,42 @@ const YT_VIDEO_ID = /^[\w-]{11}$/
 const YT_DOWNLOAD_HOST = /^([a-z0-9-]+\.)*wejfknwejfkerf\.org$/
 const YT_DOWNLOAD_ID = /^[0-9a-f]+$/
 
+// Only our own page may drive the proxy routes. Sec-Fetch-Site is set by the
+// browser and page script cannot forge it, so same-origin is the real gate;
+// Origin and Referer are belt and braces, and since a same-origin GET carries
+// no Origin, each is refused only when present and foreign. Kept in step with
+// the maps in the nginx templates. localhost is allowed so the dev server and
+// the docker quickstart work; the deployment is chatsounds.metastruct.net.
+const PROXY_PATHS = new Set(['/yt/status', '/yt/dl', '/fetch'])
+const proxyOriginOk = (origin?: string) =>
+  !origin ||
+  origin === 'https://chatsounds.metastruct.net' ||
+  /^https?:\/\/localhost(:\d+)?$/.test(origin) ||
+  /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)
+const proxyRefererOk = (referer?: string) =>
+  !referer ||
+  /^https:\/\/chatsounds\.metastruct\.net\//.test(referer) ||
+  /^https?:\/\/localhost(:\d+)?\//.test(referer) ||
+  /^https?:\/\/127\.0\.0\.1(:\d+)?\//.test(referer)
+function fromOwnPage(req: import('node:http').IncomingMessage): boolean {
+  return (
+    req.headers['sec-fetch-site'] === 'same-origin' &&
+    proxyOriginOk(req.headers.origin) &&
+    proxyRefererOk(req.headers.referer)
+  )
+}
+
 function ytRoutes(): Plugin {
   return {
     name: 'chatsounds-yt-routes',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         const url = new URL(req.url ?? '', 'http://localhost')
+
+        if (PROXY_PATHS.has(url.pathname) && !fromOwnPage(req)) {
+          res.statusCode = 403
+          return res.end()
+        }
 
         if (url.pathname === '/yt/status') {
           const id = url.searchParams.get('id') ?? ''
