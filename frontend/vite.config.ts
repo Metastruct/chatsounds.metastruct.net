@@ -77,6 +77,111 @@ function shareRoutes(): Plugin {
   }
 }
 
+/**
+ * /yt/status and /yt/dl in development, which nginx serves in production; see
+ * the "youtube" block in docker/nginx.conf.template, changed
+ * together with this.
+ *
+ * API answers an empty status forever unless the Referer and Origin
+ * look like its own site, and its download host sends no CORS headers at all,
+ * so the browser can talk to neither directly. These routes forward the two
+ * calls with the headers the service expects, and nothing else: the status
+ * route takes only an 11-char video id, the download route only a host inside
+ * the API's download domain, so neither is a proxy to anywhere.
+ */
+const MP3COW_HEADERS = {
+  Referer: 'https://mp3cow.com/',
+  Origin: 'https://mp3cow.com',
+  'User-Agent':
+    'Mozilla/5.0 (X11; Linux x86_64; rv:129.0) Gecko/20100101 Firefox/129.0',
+  Accept: '*/*',
+}
+const YT_VIDEO_ID = /^[\w-]{11}$/
+const YT_DOWNLOAD_HOST = /^([a-z0-9-]+\.)*wejfknwejfkerf\.org$/
+const YT_DOWNLOAD_ID = /^[0-9a-f]+$/
+
+function ytRoutes(): Plugin {
+  return {
+    name: 'chatsounds-yt-routes',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const url = new URL(req.url ?? '', 'http://localhost')
+
+        if (url.pathname === '/yt/status') {
+          const id = url.searchParams.get('id') ?? ''
+          if (!YT_VIDEO_ID.test(id)) {
+            res.statusCode = 403
+            return res.end()
+          }
+          void ytStatus(id, res).catch(() => {
+            res.statusCode = 502
+            res.end()
+          })
+          return
+        }
+
+        if (url.pathname === '/yt/dl') {
+          const host = url.searchParams.get('h') ?? ''
+          const id = url.searchParams.get('i') ?? ''
+          if (!YT_DOWNLOAD_HOST.test(host) || !YT_DOWNLOAD_ID.test(id)) {
+            res.statusCode = 403
+            return res.end()
+          }
+          void ytDownload(host, id, res).catch(() => {
+            res.statusCode = 502
+            res.end()
+          })
+          return
+        }
+
+        // Direct audio/video links, through the same SSRF-guarded fetch mp4d
+        // runs in production. Same module, so the guard cannot drift.
+        if (url.pathname === '/fetch') {
+          void import('../docker/mediaProxy.mjs')
+            .then(({ proxyMedia }) => proxyMedia(url.searchParams.get('url'), res))
+            .catch(() => {
+              res.statusCode = 502
+              res.end()
+            })
+          return
+        }
+
+        next()
+      })
+    },
+  }
+}
+
+async function ytStatus(id: string, res: import('node:http').ServerResponse) {
+  const upstream = await fetch(`https://api.mp3cow.com/z.php?id=${id}&t=${Date.now()}`, {
+    headers: MP3COW_HEADERS,
+  })
+  res.statusCode = upstream.status
+  res.setHeader('Content-Type', 'application/json')
+  res.end(Buffer.from(await upstream.arrayBuffer()))
+}
+
+async function ytDownload(
+  host: string,
+  id: string,
+  res: import('node:http').ServerResponse,
+) {
+  const upstream = await fetch(`https://${host}/dl.php?id=${id}`, {
+    headers: MP3COW_HEADERS,
+  })
+  if (!upstream.ok || !upstream.body) {
+    res.statusCode = upstream.status || 502
+    return res.end()
+  }
+  res.statusCode = 200
+  res.setHeader('Content-Type', upstream.headers.get('content-type') ?? 'audio/mpeg')
+  const length = upstream.headers.get('content-length')
+  if (length) res.setHeader('Content-Length', length)
+  // Piped rather than buffered: this one can be a whole video's worth of mp3.
+  const { Readable } = await import('node:stream')
+  Readable.fromWeb(upstream.body as import('node:stream/web').ReadableStream).pipe(res)
+}
+
 async function streamSound(encoded: string, res: import('node:http').ServerResponse) {
   const upstream = await fetch(`${UPSTREAM_RAW}/${encoded}`)
   if (!upstream.ok || !upstream.body) {
@@ -206,7 +311,7 @@ a{display:inline-block;margin-top:1.6rem;color:#09b387;font-size:.85rem}
 }
 
 export default defineConfig({
-  plugins: [react(), shareRoutes()],
+  plugins: [react(), shareRoutes(), ytRoutes()],
   server: {
     port: 5173,
     // The dev server has to reproduce the production headers, or the pipeline

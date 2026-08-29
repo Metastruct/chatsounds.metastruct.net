@@ -24,6 +24,7 @@ import { createReadStream } from 'node:fs'
 import { mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { dirname, join } from 'node:path'
+import { proxyMedia } from './mediaProxy.mjs'
 
 const PORT = Number(process.env.MP4D_PORT ?? 8081)
 const CACHE_ROOT = process.env.MP4D_CACHE ?? '/var/cache/chatsounds-mp4'
@@ -56,7 +57,15 @@ const server = createServer((req, res) => {
 })
 
 async function handle(req, res) {
-  const match = /^\/mp4\/([^?#]+)\.mp4$/.exec(req.url ?? '')
+  // The Extract tab fetches direct media links through here, since the page is
+  // cross-origin-isolated and most hosts send no CORS headers. The guard lives
+  // in mediaProxy.mjs; nginx only forwards the path.
+  const url = req.url ?? ''
+  if (url === '/fetch' || url.startsWith('/fetch?')) {
+    return proxyMedia(new URL(url, 'http://localhost').searchParams.get('url'), res)
+  }
+
+  const match = /^\/mp4\/([^?#]+)\.mp4$/.exec(url)
   if (!match) return send(res, 404)
 
   let decoded

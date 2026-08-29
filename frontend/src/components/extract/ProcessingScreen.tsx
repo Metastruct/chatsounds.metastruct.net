@@ -1,6 +1,8 @@
 import { useJob } from '../../store/useJob'
 
 const STAGES = [
+  // Only shown when the run began with a pasted link.
+  { key: 'fetching', label: 'Getting the recording', note: 'bringing it in from the link' },
   { key: 'decoding', label: 'Opening the file', note: 'pulling the audio out of it' },
   { key: 'analyzing', label: 'Looking at the sound', note: 'drawing the waveform' },
   { key: 'detecting', label: 'Finding the lines', note: 'spotting where someone speaks' },
@@ -17,8 +19,6 @@ const STAGES = [
   { key: 'segmenting', label: 'Cutting the clips', note: 'tidying up the edges' },
 ]
 
-const ORDER = STAGES.map((stage) => stage.key)
-
 function megabytes(bytes: number): string {
   return bytes >= 1024 * 1024
     ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
@@ -26,18 +26,20 @@ function megabytes(bytes: number): string {
 }
 
 export function ProcessingScreen() {
-  const { status, progress, error, notice, filename, reset } = useJob()
+  const { status, progress, error, notice, filename, viaUrl, reset } = useJob()
 
+  // A local file never fetched anything; showing that stage as already done
+  // would be a small lie at the top of every run.
+  const stages = viaUrl ? STAGES : STAGES.slice(1)
   const stage = progress?.stage ?? 'decoding'
   const fraction = progress?.fraction ?? 0
-  const current = ORDER.indexOf(stage)
+  const current = stages.findIndex((item) => item.key === stage)
   const failed = status === 'failed'
 
-  const downloading = stage === 'downloading'
   const loaded = progress?.loaded ?? 0
   const total = progress?.total ?? 0
   // Until a file reports its size there is nothing honest to divide by.
-  const haveBytes = downloading && total > 0
+  const haveBytes = total > 0
 
   return (
     <>
@@ -78,7 +80,7 @@ export function ProcessingScreen() {
             )}
 
             <ol className="stage-list">
-              {STAGES.map((item, index) => {
+              {stages.map((item, index) => {
                 const state =
                   current > index ? 'done' : current === index ? 'active' : 'todo'
                 return (
@@ -88,9 +90,10 @@ export function ProcessingScreen() {
                       <p className="stage-label">{item.label}</p>
                       <p className="muted">{item.note}</p>
 
-                      {/* The download gets its own bar in bytes. A percentage
+                      {/* The downloads get their own bar in bytes. A percentage
                           alone is not reassuring when a fetch can be 800 MB. */}
-                      {item.key === 'downloading' && state === 'active' && (
+                      {(item.key === 'downloading' || item.key === 'fetching') &&
+                        state === 'active' && (
                         <div className="download-detail">
                           {haveBytes ? (
                             <>
@@ -113,9 +116,12 @@ export function ProcessingScreen() {
                           ) : (
                             <p className="muted is-loading-pulse">connecting…</p>
                           )}
-                          <p className="muted download-note">
-                            The total grows as more parts turn up.
-                          </p>
+                          {/* True of the model's shards, not of one file. */}
+                          {item.key === 'downloading' && (
+                            <p className="muted download-note">
+                              The total grows as more parts turn up.
+                            </p>
+                          )}
                         </div>
                       )}
                     </div>

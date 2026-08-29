@@ -11,6 +11,13 @@
 
 import { create } from 'zustand'
 import { toBlob } from '../lib/blob'
+import {
+  directFetchPath,
+  fetchAsFile,
+  resolveYoutube,
+  youtubeId,
+  ytDownloadPath,
+} from '../lib/fetchMedia'
 import { MASTER_SAMPLE_RATE, decodeFile, deriveWork } from '../pipeline/decode'
 import { DEFAULT_QUALITY, cutClip } from '../pipeline/encode'
 import { type Envelope, peaksFor } from '../pipeline/envelope'
@@ -69,6 +76,8 @@ interface JobState {
   error: string | null
   /** Something the run had to work around, worth saying out loud once. */
   notice: string | null
+  /** The run began with a pasted link, so the stage list shows the fetch. */
+  viaUrl: boolean
 
   filename: string
   /** What the download is called. Starts as the filename, and is editable. */
@@ -84,6 +93,7 @@ interface JobState {
   options: AnalyzeOptions
 
   start: (file: File, options: AnalyzeOptions) => Promise<void>
+  startFromUrl: (url: string, options: AnalyzeOptions) => Promise<void>
   reset: () => void
 
   select: (id: string | null) => void
@@ -186,23 +196,11 @@ function toPackSegments(segments: Segment[]): PackSegment[] {
   }))
 }
 
-export const useJob = create<JobState>((set, get) => ({
-  status: 'idle',
-  progress: null,
-  error: null,
-  notice: null,
-  filename: '',
-  name: 'clips',
-  durationS: 0,
-  backend: '',
-  master: null,
-  envelope: null,
-  segments: [],
-  selectedId: null,
-  options: { ...DEFAULTS },
-
-  async start(file, options) {
-    get().reset()
+export const useJob = create<JobState>((set, get) => {
+  // The shared tail of both starts: decode, analyze, land in the editor.
+  // A closure rather than an action so startFromUrl can reach it without the
+  // reset() at the top of start wiping the state it set up first.
+  const run = async (file: File, options: AnalyzeOptions) => {
     const merged = { ...DEFAULTS, ...options }
     set({
       status: 'decoding',
@@ -278,6 +276,74 @@ export const useJob = create<JobState>((set, get) => ({
         progress: null,
       })
     }
+  }
+
+  return {
+  status: 'idle',
+  progress: null,
+  error: null,
+  notice: null,
+  viaUrl: false,
+  filename: '',
+  name: 'clips',
+  durationS: 0,
+  backend: '',
+  master: null,
+  envelope: null,
+  segments: [],
+  selectedId: null,
+  options: { ...DEFAULTS },
+
+  async start(file, options) {
+    get().reset()
+    await run(file, options)
+  },
+
+  async startFromUrl(url, options) {
+    get().reset()
+    const id = youtubeId(url)
+    const waiting = (message: string, loaded = 0, total = 0, fraction = 0.005) => ({
+      progress: { stage: 'fetching', fraction, message, loaded, total },
+    })
+    set({
+      viaUrl: true,
+      status: 'decoding',
+      filename: id ? url : filenameGuess(url),
+      ...waiting('contacting the link'),
+    })
+    // The whole fetch lives under decoding's 0.01 on the page-wide bar; the
+    // byte figures in the stage list carry the real information.
+    const onProgress = (loaded: number, total: number) =>
+      set(
+        waiting(
+          'downloading the recording',
+          loaded,
+          total,
+          total ? 0.01 * (loaded / total) : 0.005,
+        ),
+      )
+
+    try {
+      let file: File
+      if (id) {
+        set(waiting('asking the converter for the audio'))
+        const { download, title } = await resolveYoutube(id, (elapsedS) =>
+          set(waiting(`still converting (${elapsedS}s)`)),
+        )
+        const name = `${safeFileName(title, 'youtube audio')}.mp3`
+        set({ filename: name })
+        file = await fetchAsFile(ytDownloadPath(download), { name, onProgress })
+      } else {
+        file = await fetchAsFile(directFetchPath(url), { nameFromUrl: url, onProgress })
+      }
+      await run(file, options)
+    } catch (error) {
+      set({
+        status: 'failed',
+        error: error instanceof Error ? error.message : String(error),
+        progress: null,
+      })
+    }
   },
 
   reset() {
@@ -291,6 +357,7 @@ export const useJob = create<JobState>((set, get) => ({
       progress: null,
       error: null,
       notice: null,
+      viaUrl: false,
       filename: '',
       durationS: 0,
       backend: '',
@@ -609,7 +676,18 @@ export const useJob = create<JobState>((set, get) => ({
     const { envelope } = get()
     return envelope ? peaksFor(envelope) : null
   },
-}))
+  }
+})
+
+/** Something to head the processing screen with before the fetch answers. */
+function filenameGuess(url: string): string {
+  try {
+    const base = new URL(url).pathname.split('/').filter(Boolean).pop() ?? ''
+    return decodeURIComponent(base) || url
+  } catch {
+    return url
+  }
+}
 
 /** Where each enabled clip lands, keyed by segment id. */
 export function relativePaths(segments: Segment[]): Map<string, string> {

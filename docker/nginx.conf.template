@@ -115,6 +115,41 @@ server {
         proxy_set_header Accept application/json;
     }
 
+    # --- youtube ------------------------------------------------
+    # The Extract tab takes a YouTube link and has an API convert it. Its
+    # API answers an empty status forever unless the Referer and Origin look
+    # like its own site, and its download host sends no CORS headers, so the
+    # browser can call neither directly; these locations forward the two calls
+    # with the headers the service expects. Mirrored by ytRoutes() in
+    # frontend/vite.config.ts for development; the two change together.
+    #
+    # Neither is an open proxy: /yt/status takes only an 11-char video id, and
+    # /yt/dl only a host inside the API's current download domain. That domain
+    # is theirs to rotate, so the pattern below (and its copies in
+    # vite.config.ts and frontend/src/lib/fetchMedia.ts) may need updating.
+    location = /yt/status {
+        if ($arg_id !~ "^[A-Za-z0-9_-]{11}$") { return 403; }
+        set $mp3cow "https://api.mp3cow.com";
+        proxy_pass $mp3cow/z.php$is_args$args;
+        proxy_ssl_server_name on;
+        proxy_set_header Host api.mp3cow.com;
+        proxy_set_header Referer "https://mp3cow.com/";
+        proxy_set_header Origin "https://mp3cow.com";
+        proxy_set_header User-Agent "Mozilla/5.0 (X11; Linux x86_64; rv:129.0) Gecko/20100101 Firefox/129.0";
+        proxy_set_header Accept "*/*";
+    }
+    location = /yt/dl {
+        if ($arg_h !~ "^([a-z0-9-]+\.)*wejfknwejfkerf\.org$") { return 403; }
+        if ($arg_i !~ "^[0-9a-f]+$") { return 403; }
+        proxy_pass https://$arg_h/dl.php?id=$arg_i;
+        proxy_ssl_server_name on;
+        proxy_ssl_name $arg_h;
+        proxy_set_header Host $arg_h;
+        proxy_set_header Referer "https://mp3cow.com/";
+        proxy_set_header User-Agent "Mozilla/5.0 (X11; Linux x86_64; rv:129.0) Gecko/20100101 Firefox/129.0";
+        proxy_set_header Accept "*/*";
+    }
+
     # --- sharing one sound -------------------------------------------------
     # A link to raw.githubusercontent.com is the obvious way to hand someone a
     # sound and the wrong one: GitHub serves every .ogg as
@@ -170,6 +205,17 @@ server {
         proxy_read_timeout 120s;
         add_header Cross-Origin-Resource-Policy cross-origin always;
         add_header Access-Control-Allow-Origin "*" always;
+    }
+
+    # The Extract tab fetches direct audio/video links through mp4d, which most
+    # hosts will not let this cross-origin-isolated page read itself. mp4d holds
+    # the SSRF guard (private, loopback and metadata addresses refused); nginx
+    # only forwards the path. Buffering off so bytes and the size flow through
+    # for the progress bar, and a long timeout for a slow or large download.
+    location = /fetch {
+        proxy_pass http://127.0.0.1:8081;
+        proxy_read_timeout 300s;
+        proxy_buffering off;
     }
 
     location ~ "^/s/(?<s_realm>[a-z0-9 ._!()+\x80-\xff-]+)/(?<s_name>[a-z0-9 ._!()+/\x80-\xff-]+)\.ogg$" {

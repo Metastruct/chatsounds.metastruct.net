@@ -7,6 +7,7 @@ import {
   gpuStatus,
   platformFamily,
 } from '../../pipeline/gpu'
+import { youtubeId } from '../../lib/fetchMedia'
 import { ACCEPTED_EXTENSIONS, describeUnsupported } from '../../pipeline/decode'
 import { DEFAULTS, useJob } from '../../store/useJob'
 import type { AnalyzeOptions } from '../../workers/pipeline.worker'
@@ -15,9 +16,11 @@ const ACCEPT = ACCEPTED_EXTENSIONS.join(',')
 
 export function StartScreen() {
   const start = useJob((state) => state.start)
+  const startFromUrl = useJob((state) => state.startFromUrl)
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   const [options, setOptions] = useState<AnalyzeOptions>({})
+  const [url, setUrl] = useState('')
   const [dragging, setDragging] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [gpu, setGpu] = useState<GpuStatus | null>(null)
@@ -35,6 +38,44 @@ export function StartScreen() {
     }
     setError(null)
     void start(file, options)
+  }
+
+  const sendUrl = () => {
+    const trimmed = url.trim()
+    if (!trimmed) return
+
+    let parsed: URL
+    try {
+      parsed = new URL(trimmed)
+    } catch {
+      setError('That does not look like a link.')
+      return
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      setError('That does not look like a link.')
+      return
+    }
+
+    // A known-bad extension deserves the good local error with the ffmpeg
+    // hint; a path with no extension passes, the Content-Type decides later.
+    if (!youtubeId(trimmed)) {
+      let base = parsed.pathname.split('/').pop() ?? ''
+      try {
+        base = decodeURIComponent(base)
+      } catch {
+        /* keep it encoded */
+      }
+      if (/\.[^.]+$/.test(base)) {
+        const unsupported = describeUnsupported(base)
+        if (unsupported) {
+          setError(unsupported)
+          return
+        }
+      }
+    }
+
+    setError(null)
+    void startFromUrl(trimmed, options)
   }
 
   return (
@@ -68,6 +109,35 @@ export function StartScreen() {
         <p className="title is-4">Drop a recording here</p>
         <p className="muted">
           Audio or video: mp3, wav, ogg, flac, m4a, opus, mp4, webm, mov.
+        </p>
+      </div>
+
+      <div className="field" style={{ marginTop: '1rem' }}>
+        <label className="label" htmlFor="url">
+          Or paste a link
+        </label>
+        <div className="row is-tight">
+          <input
+            id="url"
+            className="input"
+            placeholder="https://youtube.com/watch?v=... or a direct file link"
+            value={url}
+            onChange={(event) => setUrl(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') sendUrl()
+            }}
+          />
+          <button
+            type="button"
+            className="button is-primary"
+            disabled={!url.trim()}
+            onClick={sendUrl}
+          >
+            Fetch
+          </button>
+        </div>
+        <p className="help">
+          A YouTube video, or a direct link to an audio or video file.
         </p>
       </div>
 

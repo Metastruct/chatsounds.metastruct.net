@@ -22,6 +22,8 @@ RUN apk add --no-cache openssl ffmpeg nodejs
 COPY --from=build /build/dist /usr/share/nginx/html
 
 COPY docker/mp4d.mjs /opt/chatsounds/mp4d.mjs
+# The SSRF-guarded fetch mp4d and the dev server both use for direct links.
+COPY docker/mediaProxy.mjs /opt/chatsounds/mediaProxy.mjs
 # Two shapes: standalone, which makes its own certificate and speaks HTTPS, and
 # BEHIND_PROXY, which speaks plain HTTP because something in front of it holds a
 # real certificate. The entrypoint picks one.
