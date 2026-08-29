@@ -118,10 +118,11 @@ no location and falls through to the app.
 
 **How the PR is made.** Everything runs in the tab against the REST API: ensure
 a fork exists (creating one is idempotent and asynchronous, so it is polled),
-best-effort sync the fork with upstream, branch from its head, upload each
-sound as a base64 blob, build a tree and commit, then open the cross-repo pull
-request against `master`. Every step is idempotent or freshly named, so a
-failed run is safe to retry.
+best-effort fast-forward the fork's default branch, then branch from upstream's
+head (forks share their network's object store, so a stale fork still accepts
+the ref), upload each sound as a base64 blob, build a tree and commit, then
+open the cross-repo pull request against `master`. Every step is idempotent or
+freshly named, so a failed run is safe to retry.
 
 ### Reviewing
 

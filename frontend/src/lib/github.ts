@@ -22,10 +22,11 @@
  * ## Why a fork
  *
  * Nearly nobody has push access to the chatsounds repo, so the pull request
- * comes from a fork: make sure one exists, bring its default branch up to date,
- * branch, commit the sounds via the Git data API (they are binary, so blobs
- * from base64), and open the PR across repos. Every step is idempotent or
- * freshly named, so a failed run can simply be retried.
+ * comes from a fork: make sure one exists, branch from upstream's head (forks
+ * share their network's object store, so a stale fork is no obstacle), commit
+ * the sounds via the Git data API (they are binary, so blobs from base64), and
+ * open the PR across repos. Every step is idempotent or freshly named, so a
+ * failed run can simply be retried.
  */
 
 export const UPSTREAM = { owner: 'Metastruct', repo: 'garrysmod-chatsounds', branch: 'master' }
@@ -315,30 +316,52 @@ export async function openPullRequest(
     }
   }
 
-  // Best effort: a stale fork makes the PR diff carry unrelated history. A 409
-  // (conflict) is let through by `api` and simply means we branch from where
-  // the fork is.
+  // Cosmetic only: fast-forward the fork's default branch when possible so the
+  // user's fork looks current. Correctness does not depend on it; the branch
+  // below is cut from upstream's head, not the fork's. A 409 (histories
+  // diverged) is let through by `api`, other failures are swallowed here.
   say('bringing the fork up to date', 0.12)
   try {
     await api(token, 'POST', `${forkPath}/merge-upstream`, { branch: fork.default_branch })
   } catch {
-    /* the branch from the fork's own head still works */
+    /* fine, the fork stays as it is */
   }
 
-  const baseSha = (
+  // Branch from upstream's head. Forks share the object store of their network,
+  // so the fork accepts a ref to an upstream commit even when it has never been
+  // synced; branching from the fork's own head instead would make a stale
+  // fork's PR carry old history or phantom deletions.
+  const upstreamSha = (
     await api<{ object: { sha: string } }>(
       token,
       'GET',
-      `${forkPath}/git/ref/heads/${fork.default_branch}`,
+      `/repos/${UPSTREAM.owner}/${UPSTREAM.repo}/git/ref/heads/${UPSTREAM.branch}`,
     )
   ).data.object.sha
 
   const branch = `add-sounds-${Date.now().toString(36)}`
   say('starting a branch', 0.16)
-  await api(token, 'POST', `${forkPath}/git/refs`, {
-    ref: `refs/heads/${branch}`,
-    sha: baseSha,
-  })
+  let baseSha = upstreamSha
+  try {
+    await api(token, 'POST', `${forkPath}/git/refs`, {
+      ref: `refs/heads/${branch}`,
+      sha: baseSha,
+    })
+  } catch {
+    // A fork detached from the network rejects upstream shas (422); fall back
+    // to its own head.
+    baseSha = (
+      await api<{ object: { sha: string } }>(
+        token,
+        'GET',
+        `${forkPath}/git/ref/heads/${fork.default_branch}`,
+      )
+    ).data.object.sha
+    await api(token, 'POST', `${forkPath}/git/refs`, {
+      ref: `refs/heads/${branch}`,
+      sha: baseSha,
+    })
+  }
 
   // One blob per file. The tree API only takes text content inline, so binary
   // goes up as base64 blobs first.
